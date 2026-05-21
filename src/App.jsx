@@ -161,7 +161,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🚛</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: "#f1f5f9" }}>FleetAI</div>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#f1f5f9" }}>Supremo Açaí</div>
             <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.08em" }}>GESTÃO DE FROTA</div>
           </div>
         </div>
