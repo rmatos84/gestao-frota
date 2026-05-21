@@ -173,7 +173,7 @@ export default function App() {
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px" }}>
 
         {/* Tabs com submenu */}
-        <div style={{ display: "flex", gap: 3, background: "#0f172a", borderRadius: 12, padding: 4, marginBottom: 24, border: "1px solid #1e293b", overflowX: "auto", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 3, background: "#0f172a", borderRadius: 12, padding: 4, marginBottom: 24, border: "1px solid #1e293b", alignItems: "center", position: "relative" }}>
           {[["dashboard","📊 Dashboard"],["registros","⛽ Abastecimentos"]].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
               style={{ padding: "7px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", background: tab === key ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: tab === key ? "#fff" : "#64748b" }}>
