@@ -156,7 +156,6 @@ export default function App() {
     <div style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#0a0f1a", minHeight: "100vh", color: "#e2e8f0" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* Header */}
       <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🚛</div>
@@ -172,7 +171,6 @@ export default function App() {
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px" }}>
 
-        {/* Tabs com submenu */}
         <div style={{ display: "flex", gap: 3, background: "#0f172a", borderRadius: 12, padding: 4, marginBottom: 24, border: "1px solid #1e293b", alignItems: "center", position: "relative" }}>
           {[["dashboard","📊 Dashboard"],["registros","⛽ Abastecimentos"]].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)}
@@ -181,7 +179,6 @@ export default function App() {
             </button>
           ))}
 
-          {/* Dropdown Cadastros */}
           <div ref={dropdownRef} style={{ position: "relative" }}>
             <button onClick={() => setCadastroOpen(!cadastroOpen)}
               style={{ padding: "7px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5, background: isCadastro ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: isCadastro ? "#fff" : "#64748b" }}>
@@ -276,22 +273,35 @@ export default function App() {
               ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro ainda.</div>
               : <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflowX:"auto" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                    <thead><tr style={{ background:"#0a0f1a" }}>{["Data","Motorista","Veículo","KM Ini","KM Fim","KM Rod","Litros","km/L","Valor"].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                    <thead>
+                      <tr style={{ background:"#0a0f1a" }}>
+                        {["Data","Motorista","Veículo","KM Ini","KM Fim","KM Rod","Litros","km/L","Preço/L","Valor Total"].map(h => (
+                          <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
                     <tbody>{abastecimentos.map((r,i) => {
                       const km = r.km_final - r.km_inicial;
-                      const kml = (km/r.combustivel_litros).toFixed(2);
+                      const litros = parseFloat(r.combustivel_litros);
+                      const kml = (km / litros).toFixed(2);
                       const kmlN = parseFloat(kml);
-                      return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
-                        <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{r.motorista_nome}</td>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
-                        <td style={{ padding:"10px 14px", fontWeight:600, color:"#06b6d4" }}>{km.toLocaleString()}</td>
-                        <td style={{ padding:"10px 14px", color:"#fbbf24" }}>{r.combustivel_litros}L</td>
-                        <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:kmlN>=11?"rgba(16,185,129,0.15)":kmlN>=9?"rgba(251,191,36,0.15)":"rgba(248,113,113,0.15)", color:kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171" }}>{kml}</span></td>
-                        <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
-                      </tr>;
+                      const precoLitro = r.valor_total ? (parseFloat(r.valor_total) / litros).toFixed(2) : null;
+                      return (
+                        <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
+                          <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{r.motorista_nome}</td>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
+                          <td style={{ padding:"10px 14px", fontWeight:600, color:"#06b6d4" }}>{km.toLocaleString()}</td>
+                          <td style={{ padding:"10px 14px", color:"#fbbf24" }}>{litros}L</td>
+                          <td style={{ padding:"10px 14px" }}>
+                            <span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:kmlN>=11?"rgba(16,185,129,0.15)":kmlN>=9?"rgba(251,191,36,0.15)":"rgba(248,113,113,0.15)", color:kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171" }}>{kml}</span>
+                          </td>
+                          <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro ? "R$ "+precoLitro : "—"}</td>
+                          <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total ? "R$ "+parseFloat(r.valor_total).toFixed(2) : "—"}</td>
+                        </tr>
+                      );
                     })}</tbody>
                   </table>
                 </div>
