@@ -548,8 +548,8 @@ const saveAbast = async () => {
                         Placa: {v.placa}{v.ano?` · ${v.ano}`:""}
                       </div>
                     </div>
-                    <button onClick={() => setEditingVeiculo(v)} style={{ background:"#2563eb", border:"none", color:"#fff", borderRadius:8, padding:"6px 12px", cursor:"pointer" }}>Editar</button>
-                    <button onClick={() => deleteVeiculo(v.id)} style={{ background:"#dc2626", border:"none", color:"#fff", borderRadius:8, padding:"6px 12px", cursor:"pointer" }}>Excluir</button>
+                    <button onClick={() => setEditingVeiculo(v)} style={{ background:"#2563eb", border:"none", color:"#fff", borderRadius:8, padding:"6px 10px", cursor:"pointer" }}>Editar</button>
+                    <button onClick={() => deleteVeiculo(v.id)} style={{ background:"#dc2626", border:"none", color:"#fff", borderRadius:8, padding:"6px 10px", cursor:"pointer" }}>Excluir</button>
                   </div>)}
             </div>
           </div>
@@ -561,8 +561,9 @@ const saveAbast = async () => {
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
                   <div>
                     <label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>TIPO</label>
-                    <select value={editingVeiculo.tipo || ""} onChange={e => setEditingVeiculo(p => ({...p, tipo:e.target.value}))}
-                    style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9" }}>
+                    <select value={editingVeiculo.tipo || ""}
+                      onChange={e => setEditingVeiculo(p => ({...p,tipo:e.target.value}))}
+                      style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9" }}>
                       {TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
                     </select>
                   </div>
@@ -576,7 +577,6 @@ const saveAbast = async () => {
                 </div>
               </div>
             )}
-
 
         {/* IA */}
         {tab === "ia" && (
