@@ -11,7 +11,7 @@ const api = async (path, method = "GET", body = null) => {
       "apikey": SUPABASE_KEY,
       "Authorization": `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
-      "Prefer": method === "POST" ? "return=representation" : "",
+      "Prefer": (method === "POST" || method === "PATCH") ? "return=representation" : "",
     },
     body: body ? JSON.stringify(body) : null,
   });
@@ -42,6 +42,7 @@ export default function App() {
   const [showAbastForm, setShowAbastForm] = useState(false);
   const [formMotorista, setFormMotorista] = useState(emptyMotorista);
   const [formVeiculo, setFormVeiculo] = useState(emptyVeiculo);
+  const [editingVeiculo, setEditingVeiculo] = useState(null);
   const [formAbast, setFormAbast] = useState(emptyAbast);
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -155,7 +156,34 @@ export default function App() {
     setSaving(false);
   };
 
-  const saveAbast = async () => {
+  
+  const updateVeiculo = async () => {
+    if (!editingVeiculo) return;
+    setSaving(true);
+    try {
+      await api(`veiculos?id=eq.${editingVeiculo.id}`, "PATCH", {
+        placa: editingVeiculo.placa,
+        modelo: editingVeiculo.modelo,
+        ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null,
+        tipo: editingVeiculo.tipo
+      });
+      setEditingVeiculo(null);
+      await loadAll();
+    } catch (e) { setError(e.message); }
+    setSaving(false);
+  };
+
+  const deleteVeiculo = async (id) => {
+    if (!window.confirm("Deseja realmente excluir este veículo?")) return;
+    try {
+      await api(`veiculos?id=eq.${id}`, "DELETE");
+      await loadAll();
+    } catch (e) {
+      setError("Não foi possível excluir. Verifique vínculos.");
+    }
+  };
+
+const saveAbast = async () => {
     const { motorista_id, veiculo_id, data, km_inicial, km_final, combustivel_litros } = formAbast;
     if (!motorista_id || !veiculo_id || !data || !km_inicial || !km_final || !combustivel_litros) return;
     setSaving(true);
