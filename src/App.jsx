@@ -541,17 +541,42 @@ const saveAbast = async () => {
               {veiculos.length === 0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Nenhum veículo cadastrado.</div>
                 : veiculos.map((v,i) => <div key={v.id} style={{ padding:"14px 18px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:12 }}>
                     <div style={{ width:36, height:36, background:"linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{TIPO_ICON[v.tipo]||"🚘"}</div>
-                    <div>
+                    <div style={{ flex:1 }}>
                       <div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14 }}>{v.modelo}</div>
                       <div style={{ fontSize:11, color:"#475569" }}>
                         {v.tipo && <span style={{ background:"rgba(6,182,212,0.15)", color:"#06b6d4", border:"1px solid rgba(6,182,212,0.25)", borderRadius:99, padding:"1px 7px", marginRight:6 }}>{v.tipo}</span>}
                         Placa: {v.placa}{v.ano?` · ${v.ano}`:""}
                       </div>
                     </div>
+                    <button onClick={() => setEditingVeiculo(v)} style={{ background:"#2563eb", border:"none", color:"#fff", borderRadius:8, padding:"6px 12px", cursor:"pointer" }}>Editar</button>
+                    <button onClick={() => deleteVeiculo(v.id)} style={{ background:"#dc2626", border:"none", color:"#fff", borderRadius:8, padding:"6px 12px", cursor:"pointer" }}>Excluir</button>
                   </div>)}
             </div>
           </div>
         )}
+
+            {editingVeiculo && (
+              <div style={{ marginTop:16, background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
+                <h3 style={{ marginBottom:12 }}>Editar Veículo</h3>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
+                  <div>
+                    <label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>TIPO</label>
+                    <select value={editingVeiculo.tipo || ""} onChange={e => setEditingVeiculo(p => ({...p, tipo:e.target.value}))}
+                    style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9" }}>
+                      {TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
+                    </select>
+                  </div>
+                  {inp(editingVeiculo.placa, v => setEditingVeiculo(p => ({...p,placa:v})), "PLACA")}
+                  {inp(editingVeiculo.modelo, v => setEditingVeiculo(p => ({...p,modelo:v})), "MODELO")}
+                  {inp(editingVeiculo.ano || "", v => setEditingVeiculo(p => ({...p,ano:v})), "ANO", "number")}
+                </div>
+                <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                  <button onClick={updateVeiculo} style={{ background:"#10b981", border:"none", color:"#fff", borderRadius:8, padding:"8px 16px" }}>Salvar</button>
+                  <button onClick={() => setEditingVeiculo(null)} style={{ background:"#475569", border:"none", color:"#fff", borderRadius:8, padding:"8px 16px" }}>Cancelar</button>
+                </div>
+              </div>
+            )}
+
 
         {/* IA */}
         {tab === "ia" && (
