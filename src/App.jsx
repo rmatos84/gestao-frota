@@ -312,13 +312,13 @@ export default function App() {
             )}
           </div>
 
-          {/* IA direto no header */}
+          {/* IA direto no header 
           <button onClick={() => setTab("ia")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "ia" ? "rgba(6,182,212,0.15)" : "transparent", color: tab === "ia" ? "#06b6d4" : "#94a3b8" }}>
             🤖 IA
-          </button>
+          </button>  */}
         </div>
 
-        <button onClick={runAI} style={{ background: "linear-gradient(135deg,#06b6d4,#3b82f6)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✨ Analisar com IA</button>
+        {/* <button onClick={runAI} style={{ background: "linear-gradient(135deg,#06b6d4,#3b82f6)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✨ Analisar com IA</button>*/}
       </div>
 
       {error && <div style={{ background: "#450a0a", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "10px 24px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>{error} <span style={{ cursor: "pointer" }} onClick={() => setError("")}>✕</span></div>}
