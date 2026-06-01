@@ -31,6 +31,7 @@ const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veicu
 
 export default function App() {
   const [tab, setTab] = useState("dashboard");
+  const [logisticaOpen, setLogisticaOpen] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(false);
   const [motoristas, setMotoristas] = useState([]);
   const [veiculos, setVeiculos] = useState([]);
@@ -47,7 +48,7 @@ export default function App() {
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState("");
-  const dropdownRef = useRef(null);
+  const logisticaRef = useRef(null);
 
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
@@ -70,7 +71,12 @@ export default function App() {
 
   useEffect(() => { loadAll(); }, []);
   useEffect(() => {
-    const handler = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setCadastroOpen(false); };
+    const handler = (e) => {
+      if (logisticaRef.current && !logisticaRef.current.contains(e.target)) {
+        setLogisticaOpen(false);
+        setCadastroOpen(false);
+      }
+    };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
@@ -132,7 +138,6 @@ export default function App() {
   const totalLitros = abastFiltrados.reduce((s, r) => s + parseFloat(r.combustivel_litros || 0), 0);
   const totalGasto = abastFiltrados.reduce((s, r) => s + parseFloat(r.valor_total || 0), 0);
   const mediaKml = totalLitros > 0 ? (totalKm / totalLitros).toFixed(2) : "—";
-
   const pieData = stats.map(s => ({ name: s.nome.split(" ")[0], value: s.kmTotal, fullName: s.nome }));
   const pieTipoData = statsPorTipo.map(s => ({ name: s.tipo, value: s.kmTotal }));
 
@@ -156,7 +161,6 @@ export default function App() {
     setSaving(false);
   };
 
-  
   const updateVeiculo = async () => {
     if (!editingVeiculo) return;
     setSaving(true);
@@ -167,8 +171,7 @@ export default function App() {
         ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null,
         tipo: editingVeiculo.tipo
       });
-      setEditingVeiculo(null);
-      await loadAll();
+      setEditingVeiculo(null); await loadAll();
     } catch (e) { setError(e.message); }
     setSaving(false);
   };
@@ -178,12 +181,10 @@ export default function App() {
     try {
       await api(`veiculos?id=eq.${id}`, "DELETE");
       await loadAll();
-    } catch (e) {
-      setError("Não foi possível excluir. Verifique vínculos.");
-    }
+    } catch (e) { setError("Não foi possível excluir. Verifique vínculos."); }
   };
 
-const saveAbast = async () => {
+  const saveAbast = async () => {
     const { motorista_id, veiculo_id, data, km_inicial, km_final, combustivel_litros } = formAbast;
     if (!motorista_id || !veiculo_id || !data || !km_inicial || !km_final || !combustivel_litros) return;
     setSaving(true);
@@ -234,8 +235,6 @@ const saveAbast = async () => {
     </select>
   );
 
-  const isCadastro = tab === "motoristas" || tab === "veiculos";
-
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       const d = payload[0];
@@ -251,18 +250,74 @@ const saveAbast = async () => {
     return null;
   };
 
+  const navBtn = (label, active, onClick) => (
+    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, textAlign: "left", background: active ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: active ? "#fff" : "#94a3b8", transition: "all 0.15s" }}>
+      {label}
+    </button>
+  );
+
   return (
     <div style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#0a0f1a", minHeight: "100vh", color: "#e2e8f0" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "16px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🚛</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: "#f1f5f9" }}>Supremo Açaí</div>
-            <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.08em" }}>GESTÃO DE FROTA</div>
+      {/* Header */}
+      <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          {/* Logo */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🚛</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 17, color: "#f1f5f9" }}>Supremo Açaí</div>
+              <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.08em" }}>GESTÃO DE FROTA</div>
+            </div>
           </div>
+
+          {/* Separador */}
+          <div style={{ width: 1, height: 32, background: "#1e293b", margin: "0 4px" }} />
+
+          {/* Nav: Logística dropdown */}
+          <div ref={logisticaRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8", transition: "all 0.15s" }}>
+              🚚 Logística <span style={{ fontSize: 9, opacity: 0.6 }}>{logisticaOpen ? "▲" : "▼"}</span>
+            </button>
+
+            {logisticaOpen && (
+              <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: 6, zIndex: 200, minWidth: 200, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}>
+
+                {/* Dashboard */}
+                {navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
+
+                {/* Abastecimentos */}
+                {navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
+
+                {/* Cadastros com sub */}
+                <div>
+                  <button
+                    onClick={() => setCadastroOpen(!cadastroOpen)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
+                    <span>📋 Cadastros</span>
+                    <span style={{ fontSize: 9, opacity: 0.6 }}>{cadastroOpen ? "▲" : "▼"}</span>
+                  </button>
+
+                  {cadastroOpen && (
+                    <div style={{ paddingLeft: 12, marginTop: 2 }}>
+                      {navBtn("👤 Motoristas", tab === "motoristas", () => { setTab("motoristas"); setLogisticaOpen(false); setCadastroOpen(false); })}
+                      {navBtn("🚗 Veículos", tab === "veiculos", () => { setTab("veiculos"); setLogisticaOpen(false); setCadastroOpen(false); })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* IA direto no header */}
+          <button onClick={() => setTab("ia")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "ia" ? "rgba(6,182,212,0.15)" : "transparent", color: tab === "ia" ? "#06b6d4" : "#94a3b8" }}>
+            🤖 IA
+          </button>
         </div>
+
         <button onClick={runAI} style={{ background: "linear-gradient(135deg,#06b6d4,#3b82f6)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✨ Analisar com IA</button>
       </div>
 
@@ -270,31 +325,11 @@ const saveAbast = async () => {
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 16px" }}>
 
-        <div style={{ display: "flex", gap: 3, background: "#0f172a", borderRadius: 12, padding: 4, marginBottom: 24, border: "1px solid #1e293b", alignItems: "center", position: "relative" }}>
-          {[["dashboard","📊 Dashboard"],["registros","⛽ Abastecimentos"]].map(([key, label]) => (
-            <button key={key} onClick={() => setTab(key)} style={{ padding: "7px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", background: tab === key ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: tab === key ? "#fff" : "#64748b" }}>{label}</button>
-          ))}
-          <div ref={dropdownRef} style={{ position: "relative" }}>
-            <button onClick={() => setCadastroOpen(!cadastroOpen)} style={{ padding: "7px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5, background: isCadastro ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: isCadastro ? "#fff" : "#64748b" }}>
-              📋 Cadastros <span style={{ fontSize: 9, opacity: 0.7 }}>{cadastroOpen ? "▲" : "▼"}</span>
-            </button>
-            {cadastroOpen && (
-              <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: 4, zIndex: 100, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                {[["motoristas","👤 Motoristas"],["veiculos","🚗 Veículos"]].map(([key, label]) => (
-                  <button key={key} onClick={() => { setTab(key); setCadastroOpen(false); }} style={{ display: "block", width: "100%", padding: "9px 14px", border: "none", borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 500, textAlign: "left", background: tab === key ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: tab === key ? "#fff" : "#94a3b8" }}>{label}</button>
-                ))}
-              </div>
-            )}
-          </div>
-          <button onClick={() => setTab("ia")} style={{ padding: "7px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 500, whiteSpace: "nowrap", background: tab === "ia" ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: tab === "ia" ? "#fff" : "#64748b" }}>🤖 IA</button>
-        </div>
-
         {loading && <div style={{ textAlign: "center", padding: 60, color: "#475569" }}>Carregando...</div>}
 
         {/* DASHBOARD */}
         {!loading && tab === "dashboard" && (
           <div>
-            {/* Filtros */}
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: "16px 20px", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", display: "flex", alignItems: "center", gap: 6 }}>
@@ -318,7 +353,6 @@ const saveAbast = async () => {
               </div>
             </div>
 
-            {/* Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 20 }}>
               {[["Total KM",totalKm.toLocaleString()+" km","#06b6d4","rgba(6,182,212,0.15)","rgba(6,182,212,0.25)"],["Combustível",totalLitros.toFixed(0)+" L","#fbbf24","rgba(251,191,36,0.15)","rgba(251,191,36,0.25)"],["Média Frota",mediaKml+" km/L","#10b981","rgba(16,185,129,0.15)","rgba(16,185,129,0.25)"],["Gasto Total",totalGasto>0?"R$ "+totalGasto.toFixed(2):"—","#a78bfa","rgba(167,139,250,0.15)","rgba(167,139,250,0.25)"]].map(([label,val,color,bg,border]) => (
                 <div key={label} style={{ background:`linear-gradient(135deg,${bg},transparent)`, border:`1px solid ${border}`, borderRadius:16, padding:"16px 18px" }}>
@@ -331,7 +365,6 @@ const saveAbast = async () => {
             {stats.length === 0
               ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro encontrado{temFiltro?" para os filtros selecionados":""}.</div>
               : <>
-                  {/* Linha 1: Pizza motoristas + Ranking motoristas */}
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
                     <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
                       <div style={{ fontWeight:600, fontSize:14, color:"#f1f5f9", marginBottom:16 }}>🥧 KM por Motorista</div>
@@ -352,7 +385,6 @@ const saveAbast = async () => {
                         ))}
                       </div>
                     </div>
-
                     <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
                       <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e293b", fontWeight:600, fontSize:14, color:"#f1f5f9" }}>🏆 Ranking de Motoristas</div>
                       <div style={{ overflowY:"auto", maxHeight:320 }}>
@@ -382,7 +414,6 @@ const saveAbast = async () => {
                     </div>
                   </div>
 
-                  {/* Linha 2: Pizza por tipo + Ranking por tipo */}
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
                     <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
                       <div style={{ fontWeight:600, fontSize:14, color:"#f1f5f9", marginBottom:16 }}>🥧 KM por Tipo de Veículo</div>
@@ -398,12 +429,11 @@ const saveAbast = async () => {
                         {pieTipoData.map((d,i) => (
                           <div key={d.name} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11 }}>
                             <div style={{ width:8, height:8, borderRadius:"50%", background:COLORS[i%COLORS.length], flexShrink:0 }} />
-                            <span style={{ color:"#94a3b8" }}>{TIPO_ICON[d.name] || ""} {d.name}</span>
+                            <span style={{ color:"#94a3b8" }}>{TIPO_ICON[d.name]||""} {d.name}</span>
                           </div>
                         ))}
                       </div>
                     </div>
-
                     <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
                       <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e293b", fontWeight:600, fontSize:14, color:"#f1f5f9" }}>📊 Ranking por Tipo de Veículo</div>
                       <div style={{ overflowY:"auto", maxHeight:320 }}>
@@ -413,7 +443,7 @@ const saveAbast = async () => {
                           return (
                             <div key={s.tipo} style={{ padding:"12px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
                               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:7 }}>
-                                <div style={{ width:32, height:32, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, background:"#1e293b", flexShrink:0 }}>{TIPO_ICON[s.tipo] || "🚘"}</div>
+                                <div style={{ width:32, height:32, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, background:"#1e293b", flexShrink:0 }}>{TIPO_ICON[s.tipo]||"🚘"}</div>
                                 <div style={{ flex:1 }}>
                                   <div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9" }}>{s.tipo}</div>
                                   <div style={{ fontSize:10, color:"#475569" }}>{s.viagens} viagem{s.viagens>1?"s":""} · {s.litros.toFixed(0)}L{s.gasto>0?" · R$"+s.gasto.toFixed(2):""}</div>
@@ -522,10 +552,11 @@ const saveAbast = async () => {
         {!loading && tab === "veiculos" && (
           <div>
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
-              <button onClick={() => setShowVeiculoForm(!showVeiculoForm)} style={{ background:showVeiculoForm?"#1e293b":"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showVeiculoForm?"✕ Cancelar":"+ Novo Veículo"}</button>
+              <button onClick={() => { setShowVeiculoForm(!showVeiculoForm); setEditingVeiculo(null); }} style={{ background:showVeiculoForm?"#1e293b":"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showVeiculoForm?"✕ Cancelar":"+ Novo Veículo"}</button>
             </div>
             {showVeiculoForm && (
               <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20, marginBottom:16 }}>
+                <div style={{ fontWeight:600, marginBottom:14, color:"#f1f5f9" }}>Novo Veículo</div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
                   <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>TIPO</label>
                     <select value={formVeiculo.tipo} onChange={e => setFormVeiculo(p => ({...p,tipo:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:formVeiculo.tipo?"#f1f5f9":"#64748b", fontSize:13, outline:"none" }}>
@@ -537,46 +568,53 @@ const saveAbast = async () => {
                 <button onClick={saveVeiculo} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{saving?"Salvando...":"Salvar"}</button>
               </div>
             )}
+
             <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
               {veiculos.length === 0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Nenhum veículo cadastrado.</div>
-                : veiculos.map((v,i) => <div key={v.id} style={{ padding:"14px 18px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:12 }}>
-                    <div style={{ width:36, height:36, background:"linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{TIPO_ICON[v.tipo]||"🚘"}</div>
-                    <div style={{ flex:1 }}>
-                      <div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14 }}>{v.modelo}</div>
-                      <div style={{ fontSize:11, color:"#475569" }}>
-                        {v.tipo && <span style={{ background:"rgba(6,182,212,0.15)", color:"#06b6d4", border:"1px solid rgba(6,182,212,0.25)", borderRadius:99, padding:"1px 7px", marginRight:6 }}>{v.tipo}</span>}
-                        Placa: {v.placa}{v.ano?` · ${v.ano}`:""}
+                : veiculos.map((v,i) => (
+                  <div key={v.id}>
+                    <div style={{ padding:"14px 18px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ width:36, height:36, background:"linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{TIPO_ICON[v.tipo]||"🚘"}</div>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14 }}>{v.modelo}</div>
+                        <div style={{ fontSize:11, color:"#475569" }}>
+                          {v.tipo && <span style={{ background:"rgba(6,182,212,0.15)", color:"#06b6d4", border:"1px solid rgba(6,182,212,0.25)", borderRadius:99, padding:"1px 7px", marginRight:6 }}>{v.tipo}</span>}
+                          Placa: {v.placa}{v.ano?` · ${v.ano}`:""}
+                        </div>
                       </div>
+                      <button onClick={() => { setEditingVeiculo(editingVeiculo?.id === v.id ? null : {...v}); setShowVeiculoForm(false); }}
+                        style={{ background: editingVeiculo?.id === v.id ? "#334155" : "#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer" }}>
+                        {editingVeiculo?.id === v.id ? "✕ Fechar" : "✏️ Editar"}
+                      </button>
+                      <button onClick={() => deleteVeiculo(v.id)} style={{ background:"rgba(220,38,38,0.1)", border:"1px solid rgba(220,38,38,0.2)", color:"#f87171", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer" }}>🗑️</button>
                     </div>
-                    <button onClick={() => setEditingVeiculo(v)} style={{ background:"#2563eb", border:"none", color:"#fff", borderRadius:8, padding:"6px 10px", cursor:"pointer" }}>Editar</button>
-                    <button onClick={() => deleteVeiculo(v.id)} style={{ background:"#dc2626", border:"none", color:"#fff", borderRadius:8, padding:"6px 10px", cursor:"pointer" }}>Excluir</button>
-                  </div>)}
+
+                    {/* Form de edição inline */}
+                    {editingVeiculo?.id === v.id && (
+                      <div style={{ padding:"16px 18px", background:"#0a0f1a", borderTop:"1px solid #1e293b" }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:12 }}>
+                          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Tipo</label>
+                            <select value={editingVeiculo.tipo || ""} onChange={e => setEditingVeiculo(p => ({...p,tipo:e.target.value}))}
+                              style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
+                              <option value="">Selecione...</option>{TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
+                            </select>
+                          </div>
+                          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Placa</label>{inp(editingVeiculo.placa, val => setEditingVeiculo(p => ({...p,placa:val})), "Placa")}</div>
+                          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Modelo</label>{inp(editingVeiculo.modelo, val => setEditingVeiculo(p => ({...p,modelo:val})), "Modelo")}</div>
+                          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Ano</label>{inp(editingVeiculo.ano||"", val => setEditingVeiculo(p => ({...p,ano:val})), "Ano", "number")}</div>
+                        </div>
+                        <div style={{ display:"flex", gap:8 }}>
+                          <button onClick={updateVeiculo} disabled={saving} style={{ background:"linear-gradient(135deg,#10b981,#059669)", border:"none", color:"#fff", borderRadius:8, padding:"8px 18px", fontSize:13, fontWeight:600, cursor:"pointer", opacity:saving?0.6:1 }}>{saving?"Salvando...":"✓ Salvar"}</button>
+                          <button onClick={() => setEditingVeiculo(null)} style={{ background:"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:8, padding:"8px 18px", fontSize:13, cursor:"pointer" }}>Cancelar</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              }
             </div>
           </div>
         )}
-
-            {editingVeiculo && (
-              <div style={{ marginTop:16, background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
-                <h3 style={{ marginBottom:12 }}>Editar Veículo</h3>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
-                  <div>
-                    <label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>TIPO</label>
-                    <select value={editingVeiculo.tipo || ""}
-                      onChange={e => setEditingVeiculo(p => ({...p,tipo:e.target.value}))}
-                      style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9" }}>
-                      {TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
-                    </select>
-                  </div>
-                  {inp(editingVeiculo.placa, v => setEditingVeiculo(p => ({...p,placa:v})), "PLACA")}
-                  {inp(editingVeiculo.modelo, v => setEditingVeiculo(p => ({...p,modelo:v})), "MODELO")}
-                  {inp(editingVeiculo.ano || "", v => setEditingVeiculo(p => ({...p,ano:v})), "ANO", "number")}
-                </div>
-                <div style={{ display:"flex", gap:8, marginTop:12 }}>
-                  <button onClick={updateVeiculo} style={{ background:"#10b981", border:"none", color:"#fff", borderRadius:8, padding:"8px 16px" }}>Salvar</button>
-                  <button onClick={() => setEditingVeiculo(null)} style={{ background:"#475569", border:"none", color:"#fff", borderRadius:8, padding:"8px 16px" }}>Cancelar</button>
-                </div>
-              </div>
-            )}
 
         {/* IA */}
         {tab === "ia" && (
