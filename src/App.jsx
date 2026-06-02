@@ -4,6 +4,31 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 const SUPABASE_URL = "https://vwjetfypctzoimvvdsjo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_65zvqkMbn2aW3PN9woXtrA_iuy5Fgv7";
 
+// ─── Perfis e Permissões ─────────────────────────────────────
+const PERFIS = {
+  motorista:            { label: "Motorista",             color: "#06b6d4" },
+  supervisor_logistica: { label: "Supervisor Logística",  color: "#8b5cf6" },
+  admin:                { label: "Admin",                  color: "#f59e0b" },
+};
+
+const PERMISSOES = {
+  motorista: {
+    modulos: ["checklist"],
+  },
+  supervisor_logistica: {
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos"],
+  },
+  admin: {
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia"],
+  },
+};
+
+const temAcesso = (perfil, modulo) => {
+  const p = PERMISSOES[perfil];
+  if (!p) return false;
+  return p.modulos.includes(modulo);
+};
+
 const api = async (path, method = "GET", body = null) => {
   const token = localStorage.getItem("frota_token") || SUPABASE_KEY;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -72,6 +97,306 @@ const emptyMotorista = { nome: "", cnh: "", telefone: "" };
 const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
 const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "" };
 
+
+// ─── Configurações ───────────────────────────────────────────
+function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
+  const MODULOS = [
+    { id: "dashboard",     label: "📊 Dashboard",       grupo: "Logística" },
+    { id: "registros",     label: "⛽ Abastecimentos",   grupo: "Logística" },
+    { id: "checklist",     label: "✅ Checklist",         grupo: "Logística" },
+    { id: "motoristas",    label: "👤 Motoristas",        grupo: "Cadastros" },
+    { id: "veiculos",      label: "🚗 Veículos",          grupo: "Cadastros" },
+    { id: "ia",            label: "🤖 IA",                grupo: "IA" },
+    { id: "configuracoes", label: "⚙️ Configurações",    grupo: "Admin" },
+  ];
+
+  const [usuarios, setUsuarios] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
+  const [abaConfig, setAbaConfig] = useState("usuarios"); // "usuarios" | "perfis"
+  const [showNovoUser, setShowNovoUser] = useState(false);
+  const [novoEmail, setNovoEmail] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
+  const [novoNome, setNovoNome] = useState("");
+  const [novoPerfil, setNovoPerfil] = useState("motorista");
+  const [editandoPerfis, setEditandoPerfis] = useState(() => {
+    // Load from localStorage (local config - in real app would be from DB)
+    try {
+      const saved = localStorage.getItem("frota_permissoes");
+      return saved ? JSON.parse(saved) : {
+        motorista:            ["checklist"],
+        supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos"],
+        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes"],
+      };
+    } catch { return {}; }
+  });
+
+  const apiAdmin = async (path, method = "GET", body = null) => {
+    const token = localStorage.getItem("frota_token") || SUPABASE_KEY;
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+      method,
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    return res.json();
+  };
+
+  useEffect(() => { carregarUsuarios(); }, []);
+
+  const carregarUsuarios = async () => {
+    setLoadingUsers(true);
+    try {
+      const data = await apiAdmin("admin/users?per_page=100");
+      setUsuarios(data.users || []);
+    } catch (e) { setErro("Erro ao carregar usuários: " + e.message); }
+    setLoadingUsers(false);
+  };
+
+  const criarUsuario = async () => {
+    if (!novoEmail || !novaSenha || !novoNome) { setErro("Preencha todos os campos."); return; }
+    if (novaSenha.length < 6) { setErro("Senha deve ter pelo menos 6 caracteres."); return; }
+    setSaving(true); setErro(""); setSucesso("");
+    try {
+      const data = await apiAdmin("admin/users", "POST", {
+        email: novoEmail,
+        password: novaSenha,
+        email_confirm: true,
+        user_metadata: { nome: novoNome, perfil: novoPerfil },
+      });
+      if (data.id) {
+        setSucesso(`Usuário ${novoNome} criado com sucesso!`);
+        setNovoEmail(""); setNovaSenha(""); setNovoNome(""); setNovoPerfil("motorista");
+        setShowNovoUser(false);
+        await carregarUsuarios();
+      } else {
+        setErro(data.message || data.msg || "Erro ao criar usuário.");
+      }
+    } catch (e) { setErro("Erro: " + e.message); }
+    setSaving(false);
+  };
+
+  const atualizarPerfil = async (userId, novoPerfil) => {
+    setSaving(true); setErro(""); setSucesso("");
+    try {
+      const data = await apiAdmin(`admin/users/${userId}`, "PUT", {
+        user_metadata: { perfil: novoPerfil },
+      });
+      if (data.id) {
+        setSucesso("Perfil atualizado!");
+        await carregarUsuarios();
+      } else { setErro("Erro ao atualizar perfil."); }
+    } catch (e) { setErro("Erro: " + e.message); }
+    setSaving(false);
+  };
+
+  const excluirUsuario = async (userId, email) => {
+    if (!confirm(`Excluir usuário ${email}?`)) return;
+    setSaving(true); setErro("");
+    try {
+      await apiAdmin(`admin/users/${userId}`, "DELETE");
+      setSucesso("Usuário excluído.");
+      await carregarUsuarios();
+    } catch (e) { setErro("Erro: " + e.message); }
+    setSaving(false);
+  };
+
+  const salvarPermissoesPerfis = () => {
+    localStorage.setItem("frota_permissoes", JSON.stringify(editandoPerfis));
+    setSucesso("Permissões salvas! Recarregue a página para aplicar.");
+    setTimeout(() => setSucesso(""), 4000);
+  };
+
+  const toggleModulo = (perfil, modulo) => {
+    setEditandoPerfis(p => {
+      const mods = p[perfil] || [];
+      return {
+        ...p,
+        [perfil]: mods.includes(modulo) ? mods.filter(m => m !== modulo) : [...mods, modulo],
+      };
+    });
+  };
+
+  const inputStyle = { width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "9px 12px", color: "#f1f5f9", fontSize: 13, outline: "none", boxSizing: "border-box" };
+  const labelStyle = { fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" };
+
+  return (
+    <div>
+      {/* Header da seção */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#f59e0b,#d97706)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚙️</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Configurações</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>Gerencie usuários e permissões do sistema</div>
+        </div>
+      </div>
+
+      {/* Abas */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {[["usuarios","👥 Usuários"],["perfis","🔐 Permissões por Perfil"]].map(([id, label]) => (
+          <button key={id} onClick={() => setAbaConfig(id)}
+            style={{ padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: abaConfig === id ? "linear-gradient(135deg,#f59e0b,#d97706)" : "#1e293b", color: abaConfig === id ? "#fff" : "#64748b" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Mensagens */}
+      {erro && <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, color: "#f87171", fontSize: 13 }}>⚠️ {erro}</div>}
+      {sucesso && <div style={{ background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 14, color: "#10b981", fontSize: 13 }}>✓ {sucesso}</div>}
+
+      {/* ABA USUÁRIOS */}
+      {abaConfig === "usuarios" && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
+            <button onClick={() => { setShowNovoUser(!showNovoUser); setErro(""); }}
+              style={{ background: showNovoUser ? "#1e293b" : "linear-gradient(135deg,#f59e0b,#d97706)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              {showNovoUser ? "✕ Cancelar" : "+ Novo Usuário"}
+            </button>
+          </div>
+
+          {/* Form novo usuário */}
+          {showNovoUser && (
+            <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, color: "#f1f5f9", marginBottom: 16 }}>Novo Usuário</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>Nome</label>
+                  <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="João Silva" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>E-mail</label>
+                  <input type="email" value={novoEmail} onChange={e => setNovoEmail(e.target.value)} placeholder="joao@empresa.com" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Senha</label>
+                  <input type="password" value={novaSenha} onChange={e => setNovaSenha(e.target.value)} placeholder="Mínimo 6 caracteres" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Perfil</label>
+                  <select value={novoPerfil} onChange={e => setNovoPerfil(e.target.value)} style={inputStyle}>
+                    {Object.entries(PERFIS).map(([id, p]) => (
+                      <option key={id} value={id}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <button onClick={criarUsuario} disabled={saving}
+                style={{ marginTop: 14, background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+                {saving ? "Criando..." : "Criar Usuário"}
+              </button>
+            </div>
+          )}
+
+          {/* Lista de usuários */}
+          <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
+            {loadingUsers ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#475569" }}>Carregando usuários...</div>
+            ) : usuarios.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center", color: "#475569" }}>Nenhum usuário encontrado.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: "#0a0f1a" }}>
+                    {["Nome","E-mail","Perfil","Criado em","Ações"].map(h => (
+                      <th key={h} style={{ padding: "10px 16px", textAlign: "left", color: "#64748b", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {usuarios.map((u, i) => {
+                    const uPerfil = u.user_metadata?.perfil || "motorista";
+                    const uNome = u.user_metadata?.nome || u.email?.split("@")[0] || "—";
+                    const isMe = u.email === user.email;
+                    return (
+                      <tr key={u.id} style={{ borderTop: "1px solid #1e293b", background: i % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)" }}>
+                        <td style={{ padding: "12px 16px", color: "#f1f5f9", fontWeight: 600 }}>
+                          {uNome} {isMe && <span style={{ fontSize: 10, color: "#06b6d4", background: "rgba(6,182,212,0.1)", border: "1px solid rgba(6,182,212,0.2)", borderRadius: 99, padding: "1px 7px" }}>você</span>}
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "#94a3b8" }}>{u.email}</td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <select value={uPerfil} onChange={e => atualizarPerfil(u.id, e.target.value)} disabled={isMe || saving}
+                            style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 7, padding: "5px 10px", color: PERFIS[uPerfil]?.color || "#94a3b8", fontSize: 12, cursor: isMe ? "not-allowed" : "pointer", fontWeight: 600 }}>
+                            {Object.entries(PERFIS).map(([id, p]) => (
+                              <option key={id} value={id}>{p.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td style={{ padding: "12px 16px", color: "#64748b", fontSize: 12 }}>
+                          {new Date(u.created_at).toLocaleDateString("pt-BR")}
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {!isMe && (
+                            <button onClick={() => excluirUsuario(u.id, u.email)} disabled={saving}
+                              style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", borderRadius: 7, padding: "5px 10px", fontSize: 12, cursor: "pointer" }}>
+                              🗑 Excluir
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ABA PERMISSÕES */}
+      {abaConfig === "perfis" && (
+        <div>
+          <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.2)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#fbbf24" }}>
+            💡 Marque os módulos que cada perfil pode acessar. Ao salvar, as permissões são aplicadas para novos logins.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: 14 }}>
+            {Object.entries(PERFIS).map(([perfilId, perfilInfo]) => (
+              <div key={perfilId} style={{ background: "#0f172a", border: `1px solid ${perfilInfo.color}33`, borderRadius: 16, padding: 18 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid #1e293b" }}>
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: perfilInfo.color }} />
+                  <div style={{ fontWeight: 700, color: perfilInfo.color, fontSize: 14 }}>{perfilInfo.label}</div>
+                </div>
+                {Object.entries(
+                  MODULOS.reduce((acc, m) => { (acc[m.grupo] = acc[m.grupo] || []).push(m); return acc; }, {})
+                ).map(([grupo, mods]) => (
+                  <div key={grupo} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>{grupo}</div>
+                    {mods.map(mod => {
+                      const ativo = (editandoPerfis[perfilId] || []).includes(mod.id);
+                      const bloqueado = perfilId === "admin" && mod.id === "configuracoes"; // admin sempre tem config
+                      return (
+                        <div key={mod.id} onClick={() => !bloqueado && toggleModulo(perfilId, mod.id)}
+                          style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, marginBottom: 4, cursor: bloqueado ? "not-allowed" : "pointer", background: ativo ? `${perfilInfo.color}15` : "transparent", border: `1px solid ${ativo ? perfilInfo.color + "40" : "#1e293b"}`, transition: "all 0.15s" }}>
+                          <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${ativo ? perfilInfo.color : "#334155"}`, background: ativo ? perfilInfo.color : "transparent", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0, transition: "all 0.15s" }}>
+                            {ativo ? "✓" : ""}
+                          </div>
+                          <span style={{ fontSize: 13, color: ativo ? "#f1f5f9" : "#64748b" }}>{mod.label}</span>
+                          {bloqueado && <span style={{ fontSize: 10, color: "#475569", marginLeft: "auto" }}>sempre</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+            <button onClick={salvarPermissoesPerfis}
+              style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 10, padding: "10px 24px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+              💾 Salvar Permissões
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Login Screen ───────────────────────────────────────────
 function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -92,9 +417,12 @@ function LoginScreen({ onLogin }) {
       });
       const data = await res.json();
       if (data.access_token) {
+        const perfil = data.user?.user_metadata?.perfil || "motorista";
+        const nome = data.user?.user_metadata?.nome || email.split("@")[0];
+        const userData = { email, nome, perfil, token: data.access_token };
         localStorage.setItem("frota_token", data.access_token);
-        localStorage.setItem("frota_user", JSON.stringify({ email, nome: data.user?.user_metadata?.nome || email.split("@")[0] }));
-        onLogin({ email, nome: data.user?.user_metadata?.nome || email.split("@")[0], token: data.access_token });
+        localStorage.setItem("frota_user", JSON.stringify(userData));
+        onLogin(userData);
       } else {
         setErro("E-mail ou senha incorretos.");
       }
@@ -161,9 +489,15 @@ export default function App() {
     try {
       const u = localStorage.getItem("frota_user");
       const t = localStorage.getItem("frota_token");
-      return u && t ? JSON.parse(u) : null;
+      if (u && t) {
+        const parsed = JSON.parse(u);
+        return { ...parsed, perfil: parsed.perfil || "motorista" };
+      }
+      return null;
     } catch { return null; }
   });
+  const perfil = user?.perfil || "motorista";
+  const acesso = (modulo) => temAcesso(perfil, modulo);
 
   const handleLogin = (u) => setUser(u);
   const handleLogout = () => {
@@ -172,7 +506,8 @@ export default function App() {
     setUser(null);
   };
 
-  const [tab, setTab] = useState("dashboard");
+  const defaultTab = temAcesso(user?.perfil || "motorista", "dashboard") ? "dashboard" : "checklist";
+  const [tab, setTab] = useState(defaultTab);
   const [logisticaOpen, setLogisticaOpen] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(false);
   const [motoristas, setMotoristas] = useState([]);
@@ -486,28 +821,37 @@ export default function App() {
         </div>
         <div style={{ width: 1, height: 26, background: "#1e293b", flexShrink: 0 }} />
         <div ref={logisticaRef} style={{ position: "relative" }}>
-          <button onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
-            style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8", whiteSpace: "nowrap" }}>
-            🚚 Logística <span style={{ fontSize: 9, opacity: 0.6 }}>{logisticaOpen ? "▲" : "▼"}</span>
-          </button>
+          {acesso("dashboard") || acesso("registros") || acesso("motoristas") || acesso("veiculos") ? (
+            <button onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8", whiteSpace: "nowrap" }}>
+              🚚 Logística <span style={{ fontSize: 9, opacity: 0.6 }}>{logisticaOpen ? "▲" : "▼"}</span>
+            </button>
+          ) : (
+            <button onClick={() => setTab("checklist")}
+              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "checklist" ? "rgba(6,182,212,0.15)" : "transparent", color: tab === "checklist" ? "#06b6d4" : "#94a3b8", whiteSpace: "nowrap" }}>
+              ✅ Checklist
+            </button>
+          )}
           {logisticaOpen && (
             <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: 6, zIndex: 200, minWidth: 200, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}>
-              {navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
-              {navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
-              {navBtn("✅ Checklist", tab === "checklist", () => { setTab("checklist"); setLogisticaOpen(false); })}
-              <div>
-                <button onClick={() => setCadastroOpen(!cadastroOpen)}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
-                  <span>📋 Cadastros</span>
-                  <span style={{ fontSize: 9, opacity: 0.6 }}>{cadastroOpen ? "▲" : "▼"}</span>
-                </button>
-                {cadastroOpen && (
-                  <div style={{ paddingLeft: 12, marginTop: 2 }}>
-                    {navBtn("👤 Motoristas", tab === "motoristas", () => { setTab("motoristas"); setLogisticaOpen(false); setCadastroOpen(false); })}
-                    {navBtn("🚗 Veículos", tab === "veiculos", () => { setTab("veiculos"); setLogisticaOpen(false); setCadastroOpen(false); })}
-                  </div>
-                )}
-              </div>
+              {acesso("dashboard") && navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
+              {acesso("registros") && navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
+              {acesso("checklist") && navBtn("✅ Checklist", tab === "checklist", () => { setTab("checklist"); setLogisticaOpen(false); })}
+              {(acesso("motoristas") || acesso("veiculos")) && (
+                <div>
+                  <button onClick={() => setCadastroOpen(!cadastroOpen)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
+                    <span>📋 Cadastros</span>
+                    <span style={{ fontSize: 9, opacity: 0.6 }}>{cadastroOpen ? "▲" : "▼"}</span>
+                  </button>
+                  {cadastroOpen && (
+                    <div style={{ paddingLeft: 12, marginTop: 2 }}>
+                      {acesso("motoristas") && navBtn("👤 Motoristas", tab === "motoristas", () => { setTab("motoristas"); setLogisticaOpen(false); setCadastroOpen(false); })}
+                      {acesso("veiculos") && navBtn("🚗 Veículos", tab === "veiculos", () => { setTab("veiculos"); setLogisticaOpen(false); setCadastroOpen(false); })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -516,8 +860,23 @@ export default function App() {
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
             <div style={{ width: 26, height: 26, background: "linear-gradient(135deg,#1e293b,#334155)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>👤</div>
-            <span style={{ color: "#94a3b8", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.nome}</span>
+            <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
+              <span style={{ color: "#94a3b8", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{user.nome}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: PERFIS[perfil]?.color || "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{PERFIS[perfil]?.label || perfil}</span>
+            </div>
           </div>
+          {acesso("configuracoes") && (
+            <button onClick={() => setTab("configuracoes")}
+              style={{ padding: "5px 12px", borderRadius: 8, border: tab === "configuracoes" ? "1px solid #f59e0b" : "1px solid #334155", background: tab === "configuracoes" ? "rgba(245,158,11,0.1)" : "#1e293b", color: tab === "configuracoes" ? "#f59e0b" : "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+              ⚙️
+            </button>
+          )}
+          {acesso("configuracoes") && (
+            <button onClick={() => { setTab("configuracoes"); setLogisticaOpen(false); }}
+              style={{ padding: "5px 12px", borderRadius: 8, border: tab === "configuracoes" ? "1px solid #f59e0b" : "1px solid #334155", background: tab === "configuracoes" ? "rgba(245,158,11,0.1)" : "#1e293b", color: tab === "configuracoes" ? "#f59e0b" : "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+              ⚙️
+            </button>
+          )}
           <button onClick={handleLogout}
             style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid #334155", background: "#1e293b", color: "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
             Sair
@@ -531,7 +890,7 @@ export default function App() {
         {loading && <div style={{ textAlign: "center", padding: 60, color: "#475569" }}>Carregando...</div>}
 
         {/* ===== CHECKLIST ===== */}
-        {!loading && tab === "checklist" && (
+        {!loading && tab === "checklist" && acesso("checklist") && (
           <div>
             {/* Tabs form/histórico */}
             <div style={{ display: "flex", gap: 4, background: "#0f172a", borderRadius: 12, padding: 4, marginBottom: 24, border: "1px solid #1e293b", width: "fit-content" }}>
@@ -733,7 +1092,7 @@ export default function App() {
         )}
 
         {/* DASHBOARD */}
-        {!loading && tab === "dashboard" && (
+        {!loading && tab === "dashboard" && acesso("dashboard") && (
           <div>
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: "16px 20px", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
@@ -824,7 +1183,7 @@ export default function App() {
         )}
 
         {/* ABASTECIMENTOS */}
-        {!loading && tab === "registros" && (() => {
+        {!loading && tab === "registros" && acesso("registros") && (() => {
           // Filtrar
           const abastVisiveis = abastecimentos.filter(r => {
             if (abastFiltroMotorista && r.motorista_id !== abastFiltroMotorista) return false;
@@ -993,7 +1352,7 @@ export default function App() {
         })()}
 
         {/* MOTORISTAS */}
-        {!loading && tab === "motoristas" && (
+        {!loading && tab === "motoristas" && acesso("motoristas") && (
           <div>
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
               <button onClick={() => setShowMotoristaForm(!showMotoristaForm)} style={{ background:showMotoristaForm?"#1e293b":"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showMotoristaForm?"✕ Cancelar":"+ Novo Motorista"}</button>
@@ -1017,7 +1376,7 @@ export default function App() {
         )}
 
         {/* VEÍCULOS */}
-        {!loading && tab === "veiculos" && (
+        {!loading && tab === "veiculos" && acesso("veiculos") && (
           <div>
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
               <button onClick={() => { setShowVeiculoForm(!showVeiculoForm); setEditingVeiculo(null); }} style={{ background:showVeiculoForm?"#1e293b":"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showVeiculoForm?"✕ Cancelar":"+ Novo Veículo"}</button>
@@ -1093,6 +1452,11 @@ export default function App() {
           </div>
         )}
       </div>
+
+        {/* CONFIGURAÇÕES */}
+        {tab === "configuracoes" && acesso("configuracoes") && (
+          <ConfiguracoesTab user={user} SUPABASE_URL={SUPABASE_URL} SUPABASE_KEY={SUPABASE_KEY} PERFIS={PERFIS} />
+        )}
 
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
     </div>
