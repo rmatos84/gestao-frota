@@ -24,6 +24,7 @@ const api = async (path, method = "GET", body = null) => {
 const COLORS = ["#06b6d4","#3b82f6","#8b5cf6","#ec4899","#f59e0b","#10b981","#ef4444","#6366f1"];
 const TIPOS = ["Moto","Carro","Van","Caminhão"];
 const TIPO_ICON = { "Moto": "🏍️", "Carro": "🚗", "Van": "🚐", "Caminhão": "🚛" };
+const TIPO_COLOR = { "Moto": "#06b6d4", "Carro": "#3b82f6", "Van": "#8b5cf6", "Caminhão": "#f59e0b" };
 
 const emptyMotorista = { nome: "", cnh: "", telefone: "" };
 const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
@@ -73,8 +74,7 @@ export default function App() {
   useEffect(() => {
     const handler = (e) => {
       if (logisticaRef.current && !logisticaRef.current.contains(e.target)) {
-        setLogisticaOpen(false);
-        setCadastroOpen(false);
+        setLogisticaOpen(false); setCadastroOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -97,6 +97,7 @@ export default function App() {
 
   const temFiltro = filtroDataInicio || filtroDataFim || filtroVeiculo || filtroMotorista || filtroTipo;
 
+  // Stats gerais por motorista
   const stats = useMemo(() => {
     const por = {};
     abastFiltrados.forEach(r => {
@@ -115,23 +116,34 @@ export default function App() {
     })).sort((a, b) => b.kmTotal - a.kmTotal);
   }, [abastFiltrados]);
 
-  const statsPorTipo = useMemo(() => {
-    const por = {};
+  // Ranking por tipo → motoristas
+  const rankingPorTipo = useMemo(() => {
+    const tiposMap = {};
     abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo || "Sem tipo";
+      const nome = r.motorista_nome || r.motorista_id;
       const km = r.km_final - r.km_inicial;
-      if (!por[tipo]) por[tipo] = { km: 0, litros: 0, viagens: 0, gasto: 0 };
-      por[tipo].km += km;
-      por[tipo].litros += parseFloat(r.combustivel_litros);
-      por[tipo].viagens += 1;
-      por[tipo].gasto += parseFloat(r.valor_total || 0);
+      if (!tiposMap[tipo]) tiposMap[tipo] = {};
+      if (!tiposMap[tipo][nome]) tiposMap[tipo][nome] = { km: 0, litros: 0, viagens: 0, gasto: 0 };
+      tiposMap[tipo][nome].km += km;
+      tiposMap[tipo][nome].litros += parseFloat(r.combustivel_litros);
+      tiposMap[tipo][nome].viagens += 1;
+      tiposMap[tipo][nome].gasto += parseFloat(r.valor_total || 0);
     });
-    return Object.entries(por).map(([tipo, d]) => ({
-      tipo, kmTotal: d.km, litros: d.litros,
-      kml: d.litros > 0 ? (d.km / d.litros).toFixed(2) : "—",
-      viagens: d.viagens, gasto: d.gasto,
-    })).sort((a, b) => b.kmTotal - a.kmTotal);
+
+    return Object.entries(tiposMap).map(([tipo, motoristasMap]) => {
+      const lista = Object.entries(motoristasMap).map(([nome, d]) => ({
+        nome, kmTotal: d.km, litros: d.litros,
+        kml: d.litros > 0 ? (d.km / d.litros).toFixed(2) : "—",
+        viagens: d.viagens, gasto: d.gasto,
+      })).sort((a, b) => b.kmTotal - a.kmTotal);
+      const totalKmTipo = lista.reduce((s, m) => s + m.kmTotal, 0);
+      return { tipo, motoristas: lista, totalKm: totalKmTipo };
+    }).sort((a, b) => {
+      const order = ["Moto", "Carro", "Van", "Caminhão"];
+      return order.indexOf(a.tipo) - order.indexOf(b.tipo);
+    });
   }, [abastFiltrados, veiculos]);
 
   const totalKm = abastFiltrados.reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
@@ -139,7 +151,6 @@ export default function App() {
   const totalGasto = abastFiltrados.reduce((s, r) => s + parseFloat(r.valor_total || 0), 0);
   const mediaKml = totalLitros > 0 ? (totalKm / totalLitros).toFixed(2) : "—";
   const pieData = stats.map(s => ({ name: s.nome.split(" ")[0], value: s.kmTotal, fullName: s.nome }));
-  const pieTipoData = statsPorTipo.map(s => ({ name: s.tipo, value: s.kmTotal }));
 
   const saveMotorista = async () => {
     if (!formMotorista.nome) return;
@@ -166,10 +177,8 @@ export default function App() {
     setSaving(true);
     try {
       await api(`veiculos?id=eq.${editingVeiculo.id}`, "PATCH", {
-        placa: editingVeiculo.placa,
-        modelo: editingVeiculo.modelo,
-        ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null,
-        tipo: editingVeiculo.tipo
+        placa: editingVeiculo.placa, modelo: editingVeiculo.modelo,
+        ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null, tipo: editingVeiculo.tipo
       });
       setEditingVeiculo(null); await loadAll();
     } catch (e) { setError(e.message); }
@@ -178,10 +187,8 @@ export default function App() {
 
   const deleteVeiculo = async (id) => {
     if (!window.confirm("Deseja realmente excluir este veículo?")) return;
-    try {
-      await api(`veiculos?id=eq.${id}`, "DELETE");
-      await loadAll();
-    } catch (e) { setError("Não foi possível excluir. Verifique vínculos."); }
+    try { await api(`veiculos?id=eq.${id}`, "DELETE"); await loadAll(); }
+    catch (e) { setError("Não foi possível excluir. Verifique vínculos."); }
   };
 
   const saveAbast = async () => {
@@ -207,14 +214,13 @@ export default function App() {
   const runAI = async () => {
     setAiLoading(true); setAiAnalysis(""); setTab("ia");
     const resumo = stats.map(s => `${s.nome}: ${s.kmTotal}km, ${s.kml} km/L, ${s.viagens} viagem(ns), ${s.litros.toFixed(0)}L${s.gasto > 0 ? `, R$${s.gasto.toFixed(2)}` : ""}`).join("\n");
-    const resumoTipo = statsPorTipo.map(s => `${s.tipo}: ${s.kmTotal}km, ${s.kml} km/L, ${s.viagens} viagem(ns)`).join("\n");
+    const resumoTipo = rankingPorTipo.map(t => `${t.tipo} (${t.totalKm}km total):\n` + t.motoristas.map(m => `  - ${m.nome}: ${m.kmTotal}km, ${m.kml} km/L`).join("\n")).join("\n");
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content: `Você é especialista em gestão de frota. Analise os dados e forneça insights em português:\n\nPor motorista:\n${resumo || "Nenhum registro."}\n\nPor tipo de veículo:\n${resumoTipo || "Nenhum registro."}\n\nTotais: ${totalKm}km, ${totalLitros.toFixed(0)}L, média ${mediaKml} km/L${totalGasto > 0 ? `, R$${totalGasto.toFixed(2)}` : ""}.\n\nForneça: 1) Insights de eficiência 2) Alertas 3) Recomendações. Use bullet points.` }]
+          messages: [{ role: "user", content: `Você é especialista em gestão de frota. Analise e forneça insights em português:\n\nPor motorista:\n${resumo || "Nenhum."}\n\nPor tipo de veículo:\n${resumoTipo || "Nenhum."}\n\nTotais: ${totalKm}km, ${totalLitros.toFixed(0)}L, média ${mediaKml} km/L${totalGasto > 0 ? `, R$${totalGasto.toFixed(2)}` : ""}.\n\nForneça: 1) Insights de eficiência 2) Alertas 3) Recomendações. Use bullet points.` }]
         })
       });
       const data = await res.json();
@@ -251,7 +257,7 @@ export default function App() {
   };
 
   const navBtn = (label, active, onClick) => (
-    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, textAlign: "left", background: active ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: active ? "#fff" : "#94a3b8", transition: "all 0.15s" }}>
+    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, textAlign: "left", background: active ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: active ? "#fff" : "#94a3b8" }}>
       {label}
     </button>
   );
@@ -263,44 +269,29 @@ export default function App() {
       {/* Header */}
       <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {/* Logo */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🚛</div>
             <div>
               <div style={{ fontWeight: 700, fontSize: 17, color: "#f1f5f9" }}>Supremo Açaí</div>
-              <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.08em" }}>GESTÃO 360°</div>
+              <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.08em" }}>GESTÃO DE FROTA</div>
             </div>
           </div>
-
-          {/* Separador */}
           <div style={{ width: 1, height: 32, background: "#1e293b", margin: "0 4px" }} />
-
-          {/* Nav: Logística dropdown */}
           <div ref={logisticaRef} style={{ position: "relative" }}>
-            <button
-              onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8", transition: "all 0.15s" }}>
+            <button onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8" }}>
               🚚 Logística <span style={{ fontSize: 9, opacity: 0.6 }}>{logisticaOpen ? "▲" : "▼"}</span>
             </button>
-
             {logisticaOpen && (
               <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: 6, zIndex: 200, minWidth: 200, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}>
-
-                {/* Dashboard */}
                 {navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
-
-                {/* Abastecimentos */}
                 {navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
-
-                {/* Cadastros com sub */}
                 <div>
-                  <button
-                    onClick={() => setCadastroOpen(!cadastroOpen)}
+                  <button onClick={() => setCadastroOpen(!cadastroOpen)}
                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
                     <span>📋 Cadastros</span>
                     <span style={{ fontSize: 9, opacity: 0.6 }}>{cadastroOpen ? "▲" : "▼"}</span>
                   </button>
-
                   {cadastroOpen && (
                     <div style={{ paddingLeft: 12, marginTop: 2 }}>
                       {navBtn("👤 Motoristas", tab === "motoristas", () => { setTab("motoristas"); setLogisticaOpen(false); setCadastroOpen(false); })}
@@ -311,25 +302,22 @@ export default function App() {
               </div>
             )}
           </div>
-
-          {/* IA direto no header 
           <button onClick={() => setTab("ia")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "ia" ? "rgba(6,182,212,0.15)" : "transparent", color: tab === "ia" ? "#06b6d4" : "#94a3b8" }}>
             🤖 IA
-          </button>  */}
+          </button>
         </div>
-
-        {/* <button onClick={runAI} style={{ background: "linear-gradient(135deg,#06b6d4,#3b82f6)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✨ Analisar com IA</button>*/}
+        <button onClick={runAI} style={{ background: "linear-gradient(135deg,#06b6d4,#3b82f6)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✨ Analisar com IA</button>
       </div>
 
       {error && <div style={{ background: "#450a0a", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "10px 24px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>{error} <span style={{ cursor: "pointer" }} onClick={() => setError("")}>✕</span></div>}
 
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 16px" }}>
-
         {loading && <div style={{ textAlign: "center", padding: 60, color: "#475569" }}>Carregando...</div>}
 
         {/* DASHBOARD */}
         {!loading && tab === "dashboard" && (
           <div>
+            {/* Filtros */}
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: "16px 20px", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", display: "flex", alignItems: "center", gap: 6 }}>
@@ -353,6 +341,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 20 }}>
               {[["Total KM",totalKm.toLocaleString()+" km","#06b6d4","rgba(6,182,212,0.15)","rgba(6,182,212,0.25)"],["Combustível",totalLitros.toFixed(0)+" L","#fbbf24","rgba(251,191,36,0.15)","rgba(251,191,36,0.25)"],["Média Frota",mediaKml+" km/L","#10b981","rgba(16,185,129,0.15)","rgba(16,185,129,0.25)"],["Gasto Total",totalGasto>0?"R$ "+totalGasto.toFixed(2):"—","#a78bfa","rgba(167,139,250,0.15)","rgba(167,139,250,0.25)"]].map(([label,val,color,bg,border]) => (
                 <div key={label} style={{ background:`linear-gradient(135deg,${bg},transparent)`, border:`1px solid ${border}`, borderRadius:16, padding:"16px 18px" }}>
@@ -365,6 +354,7 @@ export default function App() {
             {stats.length === 0
               ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro encontrado{temFiltro?" para os filtros selecionados":""}.</div>
               : <>
+                  {/* Pizza motoristas + Ranking geral */}
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
                     <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
                       <div style={{ fontWeight:600, fontSize:14, color:"#f1f5f9", marginBottom:16 }}>🥧 KM por Motorista</div>
@@ -385,8 +375,9 @@ export default function App() {
                         ))}
                       </div>
                     </div>
+
                     <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
-                      <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e293b", fontWeight:600, fontSize:14, color:"#f1f5f9" }}>🏆 Ranking de Motoristas</div>
+                      <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e293b", fontWeight:600, fontSize:14, color:"#f1f5f9" }}>🏆 Ranking Geral de Motoristas</div>
                       <div style={{ overflowY:"auto", maxHeight:320 }}>
                         {stats.map((s,i) => {
                           const kmlN = parseFloat(s.kml);
@@ -414,52 +405,58 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
-                    <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
-                      <div style={{ fontWeight:600, fontSize:14, color:"#f1f5f9", marginBottom:16 }}>🥧 KM por Tipo de Veículo</div>
-                      <ResponsiveContainer width="100%" height={240}>
-                        <PieChart>
-                          <Pie data={pieTipoData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                            {pieTipoData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip content={<CustomTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:8 }}>
-                        {pieTipoData.map((d,i) => (
-                          <div key={d.name} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11 }}>
-                            <div style={{ width:8, height:8, borderRadius:"50%", background:COLORS[i%COLORS.length], flexShrink:0 }} />
-                            <span style={{ color:"#94a3b8" }}>{TIPO_ICON[d.name]||""} {d.name}</span>
-                          </div>
-                        ))}
-                      </div>
+                  {/* Ranking por tipo de veículo → motoristas */}
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, fontSize: 15, color: "#f1f5f9", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
+                      📊 Ranking de Motoristas por Tipo de Veículo
                     </div>
-                    <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
-                      <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e293b", fontWeight:600, fontSize:14, color:"#f1f5f9" }}>📊 Ranking por Tipo de Veículo</div>
-                      <div style={{ overflowY:"auto", maxHeight:320 }}>
-                        {statsPorTipo.map((s,i) => {
-                          const kmlN = parseFloat(s.kml);
-                          const pct = statsPorTipo[0].kmTotal > 0 ? (s.kmTotal/statsPorTipo[0].kmTotal)*100 : 0;
-                          return (
-                            <div key={s.tipo} style={{ padding:"12px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:7 }}>
-                                <div style={{ width:32, height:32, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, background:"#1e293b", flexShrink:0 }}>{TIPO_ICON[s.tipo]||"🚘"}</div>
-                                <div style={{ flex:1 }}>
-                                  <div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9" }}>{s.tipo}</div>
-                                  <div style={{ fontSize:10, color:"#475569" }}>{s.viagens} viagem{s.viagens>1?"s":""} · {s.litros.toFixed(0)}L{s.gasto>0?" · R$"+s.gasto.toFixed(2):""}</div>
-                                </div>
-                                <div style={{ textAlign:"right" }}>
-                                  <div style={{ fontSize:13, fontWeight:700, color:"#e2e8f0" }}>{s.kmTotal.toLocaleString()} km</div>
-                                  <div style={{ fontSize:11, fontWeight:600, color:!isNaN(kmlN)?(kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171"):"#64748b" }}>{s.kml} km/L</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
+                      {rankingPorTipo.map(({ tipo, motoristas: lista, totalKm: totalKmTipo }) => {
+                        const cor = TIPO_COLOR[tipo] || "#64748b";
+                        return (
+                          <div key={tipo} style={{ background: "#0f172a", border: `1px solid ${cor}30`, borderRadius: 16, overflow: "hidden" }}>
+                            {/* Header do tipo */}
+                            <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "space-between", background: `${cor}10` }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <div style={{ width: 34, height: 34, borderRadius: 10, background: `${cor}20`, border: `1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{TIPO_ICON[tipo] || "🚘"}</div>
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>{tipo}</div>
+                                  <div style={{ fontSize: 11, color: "#64748b" }}>{lista.length} motorista{lista.length > 1 ? "s" : ""}</div>
                                 </div>
                               </div>
-                              <div style={{ height:4, background:"#1e293b", borderRadius:99 }}>
-                                <div style={{ height:"100%", width:`${pct}%`, background:COLORS[i%COLORS.length], borderRadius:99, transition:"width 0.6s ease" }} />
+                              <div style={{ textAlign: "right" }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: cor }}>{totalKmTipo.toLocaleString()} km</div>
+                                <div style={{ fontSize: 10, color: "#64748b" }}>total rodado</div>
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+
+                            {/* Motoristas do tipo */}
+                            {lista.map((m, i) => {
+                              const kmlN = parseFloat(m.kml);
+                              const pct = lista[0].kmTotal > 0 ? (m.kmTotal / lista[0].kmTotal) * 100 : 0;
+                              return (
+                                <div key={m.nome} style={{ padding: "12px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                                    {/* Posição */}
+                                    <div style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0, background: i === 0 ? "linear-gradient(135deg,#fbbf24,#f59e0b)" : i === 1 ? "linear-gradient(135deg,#94a3b8,#64748b)" : i === 2 ? "linear-gradient(135deg,#b45309,#92400e)" : "#1e293b", color: "#fff" }}>{i + 1}</div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
+                                      <div style={{ fontSize: 10, color: "#475569" }}>{m.viagens} viagem{m.viagens > 1 ? "s" : ""} · {m.litros.toFixed(0)}L{m.gasto > 0 ? " · R$" + m.gasto.toFixed(2) : ""}</div>
+                                    </div>
+                                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                      <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>{m.kmTotal.toLocaleString()} km</div>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: !isNaN(kmlN) ? (kmlN >= 11 ? "#10b981" : kmlN >= 9 ? "#fbbf24" : "#f87171") : "#64748b" }}>{m.kml} km/L</div>
+                                    </div>
+                                  </div>
+                                  <div style={{ height: 3, background: "#1e293b", borderRadius: 99 }}>
+                                    <div style={{ height: "100%", width: `${pct}%`, background: cor, borderRadius: 99, transition: "width 0.6s ease", opacity: 0.8 }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </>
@@ -568,7 +565,6 @@ export default function App() {
                 <button onClick={saveVeiculo} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{saving?"Salvando...":"Salvar"}</button>
               </div>
             )}
-
             <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
               {veiculos.length === 0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Nenhum veículo cadastrado.</div>
                 : veiculos.map((v,i) => (
@@ -588,8 +584,6 @@ export default function App() {
                       </button>
                       <button onClick={() => deleteVeiculo(v.id)} style={{ background:"rgba(220,38,38,0.1)", border:"1px solid rgba(220,38,38,0.2)", color:"#f87171", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer" }}>🗑️</button>
                     </div>
-
-                    {/* Form de edição inline */}
                     {editingVeiculo?.id === v.id && (
                       <div style={{ padding:"16px 18px", background:"#0a0f1a", borderTop:"1px solid #1e293b" }}>
                         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:12 }}>
