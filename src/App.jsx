@@ -71,7 +71,107 @@ const emptyMotorista = { nome: "", cnh: "", telefone: "" };
 const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
 const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "" };
 
+// ─── Login Screen ───────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState("");
+  const [showSenha, setShowSenha] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!email || !senha) { setErro("Preencha e-mail e senha."); return; }
+    setLoading(true); setErro("");
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: senha })
+      });
+      const data = await res.json();
+      if (data.access_token) {
+        localStorage.setItem("frota_token", data.access_token);
+        localStorage.setItem("frota_user", JSON.stringify({ email, nome: data.user?.user_metadata?.nome || email.split("@")[0] }));
+        onLogin({ email, nome: data.user?.user_metadata?.nome || email.split("@")[0], token: data.access_token });
+      } else {
+        setErro("E-mail ou senha incorretos.");
+      }
+    } catch { setErro("Erro de conexão. Tente novamente."); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#0a0f1a", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        {/* Logo */}
+        <div style={{ textAlign: "center", marginBottom: 32 }}>
+          <div style={{ width: 64, height: 64, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 14px" }}>🚛</div>
+          <div style={{ fontWeight: 700, fontSize: 22, color: "#f1f5f9" }}>Supremo Açaí</div>
+          <div style={{ fontSize: 12, color: "#475569", letterSpacing: "0.08em", marginTop: 2 }}>GESTÃO DE FROTA</div>
+        </div>
+
+        {/* Card de login */}
+        <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 20, padding: 28 }}>
+          <div style={{ fontWeight: 600, fontSize: 18, color: "#f1f5f9", marginBottom: 6 }}>Entrar</div>
+          <div style={{ fontSize: 13, color: "#475569", marginBottom: 24 }}>Acesse sua conta para continuar</div>
+
+          {erro && (
+            <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 10, padding: "10px 14px", marginBottom: 16, color: "#f87171", fontSize: 13 }}>
+              ⚠️ {erro}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>E-mail</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" autoComplete="email"
+                style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "11px 14px", color: "#f1f5f9", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.06em" }}>Senha</label>
+              <div style={{ position: "relative" }}>
+                <input type={showSenha ? "text" : "password"} value={senha} onChange={e => setSenha(e.target.value)} placeholder="••••••••" autoComplete="current-password"
+                  style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "11px 44px 11px 14px", color: "#f1f5f9", fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+                <button type="button" onClick={() => setShowSenha(!showSenha)}
+                  style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16, padding: 0 }}>
+                  {showSenha ? "🙈" : "👁️"}
+                </button>
+              </div>
+            </div>
+            <button type="submit" disabled={loading}
+              style={{ marginTop: 8, padding: "13px", borderRadius: 12, border: "none", cursor: loading ? "not-allowed" : "pointer", fontSize: 15, fontWeight: 700, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", color: "#fff", opacity: loading ? 0.7 : 1, transition: "opacity 0.2s" }}>
+              {loading ? "Entrando..." : "Entrar →"}
+            </button>
+          </form>
+        </div>
+        <div style={{ textAlign: "center", marginTop: 16, fontSize: 11, color: "#334155" }}>
+          Problemas de acesso? Fale com o administrador.
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main App ────────────────────────────────────────────────
 export default function App() {
+  const [user, setUser] = useState(() => {
+    try {
+      const u = localStorage.getItem("frota_user");
+      const t = localStorage.getItem("frota_token");
+      return u && t ? JSON.parse(u) : null;
+    } catch { return null; }
+  });
+
+  const handleLogin = (u) => setUser(u);
+  const handleLogout = () => {
+    localStorage.removeItem("frota_token");
+    localStorage.removeItem("frota_user");
+    setUser(null);
+  };
+
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
   const [tab, setTab] = useState("dashboard");
   const [logisticaOpen, setLogisticaOpen] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(false);
@@ -405,6 +505,18 @@ export default function App() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* User info + logout */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 26, height: 26, background: "linear-gradient(135deg,#1e293b,#334155)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>👤</div>
+            <span style={{ color: "#94a3b8", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.nome}</span>
+          </div>
+          <button onClick={handleLogout}
+            style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid #334155", background: "#1e293b", color: "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
+            Sair
+          </button>
         </div>
       </div>
 
@@ -976,19 +1088,7 @@ export default function App() {
           </div>
         )}
       </div>
-      {/* Rodapé fixo com IA */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", borderTop: "1px solid #1e293b", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, zIndex: 100 }}>
-        <button onClick={() => setTab("ia")}
-          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: tab === "ia" ? "1px solid #06b6d4" : "1px solid #334155", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "ia" ? "rgba(6,182,212,0.15)" : "#1e293b", color: tab === "ia" ? "#06b6d4" : "#94a3b8", flexShrink: 0 }}>
-          🤖 IA
-        </button>
-        <button onClick={runAI} disabled={aiLoading}
-          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", color: "#fff", opacity: aiLoading ? 0.7 : 1 }}>
-          ✨ {aiLoading ? "Analisando..." : "Analisar Frota com IA"}
-        </button>
-      </div>
-      {/* Espaço para o rodapé não cobrir conteúdo */}
-      <div style={{ height: 70 }} />
+
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
     </div>
   );
