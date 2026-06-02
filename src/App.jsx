@@ -865,13 +865,7 @@ export default function App() {
               <span style={{ fontSize: 9, fontWeight: 700, color: PERFIS[perfil]?.color || "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{PERFIS[perfil]?.label || perfil}</span>
             </div>
           </div>
-          {acesso("configuracoes") && (
-            <button onClick={() => setTab("configuracoes")}
-              style={{ padding: "5px 12px", borderRadius: 8, border: tab === "configuracoes" ? "1px solid #f59e0b" : "1px solid #334155", background: tab === "configuracoes" ? "rgba(245,158,11,0.1)" : "#1e293b", color: tab === "configuracoes" ? "#f59e0b" : "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-              ⚙️
-            </button>
-          )}
-          {acesso("configuracoes") && (
+          {perfil === "admin" && (
             <button onClick={() => { setTab("configuracoes"); setLogisticaOpen(false); }}
               style={{ padding: "5px 12px", borderRadius: 8, border: tab === "configuracoes" ? "1px solid #f59e0b" : "1px solid #334155", background: tab === "configuracoes" ? "rgba(245,158,11,0.1)" : "#1e293b", color: tab === "configuracoes" ? "#f59e0b" : "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
               ⚙️
@@ -1454,7 +1448,7 @@ export default function App() {
       </div>
 
         {/* CONFIGURAÇÕES */}
-        {tab === "configuracoes" && acesso("configuracoes") && (
+        {tab === "configuracoes" && perfil === "admin" && (
           <ConfiguracoesTab user={user} SUPABASE_URL={SUPABASE_URL} SUPABASE_KEY={SUPABASE_KEY} PERFIS={PERFIS} />
         )}
 
