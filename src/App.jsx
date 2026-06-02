@@ -5,11 +5,12 @@ const SUPABASE_URL = "https://vwjetfypctzoimvvdsjo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_65zvqkMbn2aW3PN9woXtrA_iuy5Fgv7";
 
 const api = async (path, method = "GET", body = null) => {
+  const token = localStorage.getItem("frota_token") || SUPABASE_KEY;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     method,
     headers: {
       "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
+      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "Prefer": (method === "POST" || method === "PATCH") ? "return=representation" : "",
     },
@@ -171,7 +172,6 @@ export default function App() {
     setUser(null);
   };
 
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
   const [tab, setTab] = useState("dashboard");
   const [logisticaOpen, setLogisticaOpen] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(false);
@@ -233,12 +233,15 @@ export default function App() {
         api("abastecimentos?select=*&order=data.desc"),
         api("checklists?select=*&order=created_at.desc"),
       ]);
-      setMotoristas(m); setVeiculos(v); setAbastecimentos(a); setChecklists(c);
+      setMotoristas(Array.isArray(m) ? m : []); 
+      setVeiculos(Array.isArray(v) ? v : []); 
+      setAbastecimentos(Array.isArray(a) ? a : []); 
+      setChecklists(Array.isArray(c) ? c : []);
     } catch (e) { setError("Erro ao carregar dados: " + e.message); }
     setLoading(false);
   };
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { if (user) loadAll(); }, [user]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -322,7 +325,7 @@ export default function App() {
   const totalLitros = abastFiltrados.reduce((s, r) => s + parseFloat(r.combustivel_litros || 0), 0);
   const totalGasto = abastFiltrados.reduce((s, r) => s + parseFloat(r.valor_total || 0), 0);
   const mediaKml = totalLitros > 0 ? (totalKm / totalLitros).toFixed(2) : "—";
-  const pieData = stats.map(s => ({ name: s.nome.split(" ")[0], value: s.kmTotal, fullName: s.nome }));
+  const pieData = (stats || []).map(s => ({ name: (s.nome||"").split(" ")[0], value: s.kmTotal, fullName: s.nome }));
 
   const saveMotorista = async () => {
     if (!formMotorista.nome) return; setSaving(true);
@@ -465,6 +468,8 @@ export default function App() {
 
   const itensMarcados = Object.values(ckItens).filter(Boolean).length;
   const totalItens = itensChecklist.length;
+
+  if (!user) return <LoginScreen onLogin={handleLogin} />;
 
   return (
     <div style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#0a0f1a", minHeight: "100vh", color: "#e2e8f0" }}>
