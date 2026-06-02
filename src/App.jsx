@@ -3,12 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const SUPABASE_URL = "https://vwjetfypctzoimvvdsjo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_65zvqkMbn2aW3PN9woXtrA_iuy5Fgv7";
-const SUPABASE_SVC = "COLE_SERVICE_ROLE_KEY_AQUI"; // Supabase → Settings → API → service_role
-// Cole aqui o service_role key: Supabase → Settings → API → service_role
-const SUPABASE_SVC = "COLE_SERVICE_ROLE_KEY_AQUI";
-// Para o módulo de configurações funcionar, cole aqui o service_role key:
-// Supabase Dashboard → Settings → API → service_role (secret)
-const SUPABASE_SVC = "sb_secret_2YjzzEXmzeWkCe6TdhCNkA_qTT3DCzm";
+
 
 // ─── Perfis e Permissões ─────────────────────────────────────
 const PERFIS = {
@@ -123,6 +118,9 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const [sucesso, setSucesso] = useState("");
   const [abaConfig, setAbaConfig] = useState("usuarios"); // "usuarios" | "perfis"
   const [userSort, setUserSort] = useState({ col: "nome", dir: "asc" });
+  const [svcKey, setSvcKey] = useState(() => localStorage.getItem("frota_svc") || "");
+  const [showSvcInput, setShowSvcInput] = useState(false);
+  const [showSvcInput, setShowSvcInput] = useState(false);
   const [showNovoUser, setShowNovoUser] = useState(false);
   const [novoEmail, setNovoEmail] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
@@ -141,11 +139,12 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   });
 
   const apiAdmin = async (path, method = "GET", body = null) => {
+    const key = svcKey || SUPABASE_KEY;
     const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
       method,
       headers: {
         "apikey": SUPABASE_KEY,
-        "Authorization": `Bearer ${SUPABASE_SVC}`,
+        "Authorization": `Bearer ${key}`,
         "Content-Type": "application/json",
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
@@ -274,6 +273,53 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
       {/* ABA USUÁRIOS */}
       {abaConfig === "usuarios" && (
         <div>
+          {/* Service Role Key config */}
+          {!svcKey ? (
+            <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 13, color: "#fbbf24", fontWeight: 600, marginBottom: 4 }}>⚠️ Configure a chave de admin</div>
+                <div style={{ fontSize: 11, color: "#64748b" }}>Para listar e criar usuários, informe o <b>service_role key</b> do Supabase (Settings → API)</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <input type="password" value={svcKey} onChange={e => setSvcKey(e.target.value)} placeholder="service_role key..."
+                  style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 12, outline: "none", width: 240 }} />
+                <button onClick={() => { localStorage.setItem("frota_svc", svcKey); carregarUsuarios(); }}
+                  style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  Salvar e carregar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ fontSize: 11, color: "#10b981" }}>✓ Chave admin configurada</span>
+              <button onClick={() => { setSvcKey(""); localStorage.removeItem("frota_svc"); }}
+                style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>remover</button>
+            </div>
+          )}
+
+          {/* Service Role Key */}
+          {!svcKey ? (
+            <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ fontSize: 13, color: "#fbbf24", fontWeight: 600, marginBottom: 4 }}>⚠️ Configure a chave de admin</div>
+                <div style={{ fontSize: 11, color: "#64748b" }}>Para listar e criar usuários, informe o service_role key do Supabase (Settings → API)</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="password" value={svcKey} onChange={e => setSvcKey(e.target.value)} placeholder="service_role key..."
+                  style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 12, outline: "none", width: 220 }} />
+                <button onClick={() => { localStorage.setItem("frota_svc", svcKey); carregarUsuarios(); }}
+                  style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  Salvar e carregar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontSize: 11, color: "#10b981" }}>✓ Chave admin configurada</span>
+              <button onClick={() => { setSvcKey(""); localStorage.removeItem("frota_svc"); }}
+                style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>remover</button>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
             <button onClick={() => { setShowNovoUser(!showNovoUser); setErro(""); }}
               style={{ background: showNovoUser ? "#1e293b" : "linear-gradient(135deg,#f59e0b,#d97706)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -588,9 +634,6 @@ export default function App() {
   const [abastFiltroDataFim, setAbastFiltroDataFim] = useState("");
   const [abastFiltroTipo, setAbastFiltroTipo] = useState("");
   const [abastSort, setAbastSort] = useState({ col: "data", dir: "desc" });
-  const [motSort, setMotSort] = useState({ col: "nome", dir: "asc" });
-  const [veiSort, setVeiSort] = useState({ col: "modelo", dir: "asc" });
-  const [ckSort, setCkSort] = useState({ col: "data", dir: "desc" });
   const [motSort, setMotSort] = useState({ col: "nome", dir: "asc" });
   const [veiSort, setVeiSort] = useState({ col: "modelo", dir: "asc" });
   const [ckSort, setCkSort] = useState({ col: "data", dir: "desc" });
@@ -1476,7 +1519,7 @@ export default function App() {
             )}
             <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
               {veiculos.length === 0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Nenhum veículo cadastrado.</div>
-                : veiculos.map((v,i) => (
+                : veiSorted.map((v,i) => (
                   <div key={v.id}>
                     <div style={{ padding:"14px 18px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:12 }}>
                       <div style={{ width:36, height:36, background:"linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{TIPO_ICON[v.tipo]||"🚘"}</div>
@@ -1513,7 +1556,8 @@ export default function App() {
               }
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* IA */}
         {tab === "ia" && (
