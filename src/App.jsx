@@ -26,6 +26,46 @@ const TIPOS = ["Moto","Carro","Van","Caminhão"];
 const TIPO_ICON = { "Moto": "🏍️", "Carro": "🚗", "Van": "🚐", "Caminhão": "🚛" };
 const TIPO_COLOR = { "Moto": "#06b6d4", "Carro": "#3b82f6", "Van": "#8b5cf6", "Caminhão": "#f59e0b" };
 
+const ITENS_CARRO = [
+  { id: "parabrisa", label: "Para-brisa sem avaria" },
+  { id: "limpadores", label: "Limpadores para-brisa" },
+  { id: "agua_parabrisa", label: "Água do reservatório do para-brisa" },
+  { id: "agua_radiador", label: "Nível de água radiador" },
+  { id: "oleo_motor", label: "Nível do óleo do motor" },
+  { id: "oleo_dias", label: "Óleo do motor em dias" },
+  { id: "farol", label: "Farol e sinalizadores de direção" },
+  { id: "antena", label: "Antena" },
+  { id: "documento", label: "Documento atualizado" },
+  { id: "luzes_painel", label: "Luzes do painel apagadas" },
+  { id: "buzina", label: "Buzina" },
+  { id: "tapetes", label: "Tapetes" },
+  { id: "chave_roda", label: "Chave de Roda" },
+  { id: "macaco", label: "Macaco" },
+  { id: "triangulo", label: "Triângulo" },
+  { id: "maquineta", label: "Maquineta com Carregador" },
+  { id: "pneu_diant_esq", label: "Pneu Dianteiro Esquerdo" },
+  { id: "pneu_diant_dir", label: "Pneu Dianteiro Direito" },
+  { id: "pneu_tras_esq", label: "Pneu Traseiro Esquerdo" },
+  { id: "pneu_tras_dir", label: "Pneu Traseiro Direito" },
+  { id: "pneu_estepe", label: "Pneu Estepe" },
+];
+
+const ITENS_MOTO = [
+  { id: "farol", label: "Farol e lanterna funcionando" },
+  { id: "setas", label: "Setas/piscas funcionando" },
+  { id: "freio_diant", label: "Freio dianteiro em ordem" },
+  { id: "freio_tras", label: "Freio traseiro em ordem" },
+  { id: "oleo_motor", label: "Nível do óleo do motor" },
+  { id: "corrente", label: "Corrente lubrificada/ajustada" },
+  { id: "pneu_diant", label: "Pneu dianteiro em boas condições" },
+  { id: "pneu_tras", label: "Pneu traseiro em boas condições" },
+  { id: "documento", label: "Documento atualizado" },
+  { id: "buzina", label: "Buzina funcionando" },
+  { id: "retrovisor", label: "Retrovisor(es) em ordem" },
+  { id: "capacete", label: "Capacete disponível" },
+  { id: "maquineta", label: "Maquineta com Carregador" },
+];
+
 const emptyMotorista = { nome: "", cnh: "", telefone: "" };
 const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
 const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "" };
@@ -37,6 +77,7 @@ export default function App() {
   const [motoristas, setMotoristas] = useState([]);
   const [veiculos, setVeiculos] = useState([]);
   const [abastecimentos, setAbastecimentos] = useState([]);
+  const [checklists, setChecklists] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showMotoristaForm, setShowMotoristaForm] = useState(false);
@@ -51,6 +92,23 @@ export default function App() {
   const [aiAnalysis, setAiAnalysis] = useState("");
   const logisticaRef = useRef(null);
 
+  // Checklist state
+  const [ckTipo, setCkTipo] = useState("");
+  const [ckVeiculoId, setCkVeiculoId] = useState("");
+  const [ckMotoristaId, setCkMotoristaId] = useState("");
+  const [ckData, setCkData] = useState(new Date().toISOString().split("T")[0]);
+  const [ckKm, setCkKm] = useState("");
+  const [ckItens, setCkItens] = useState({});
+  const [ckObs, setCkObs] = useState("");
+  const [ckSaving, setCkSaving] = useState(false);
+  const [ckSuccess, setCkSuccess] = useState(false);
+  const [ckView, setCkView] = useState("form"); // "form" | "history"
+  // Audio
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [filtroVeiculo, setFiltroVeiculo] = useState("");
@@ -60,17 +118,19 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [m, v, a] = await Promise.all([
+      const [m, v, a, c] = await Promise.all([
         api("motoristas?select=*&order=nome"),
         api("veiculos?select=*&order=modelo"),
         api("abastecimentos?select=*&order=data.desc"),
+        api("checklists?select=*&order=created_at.desc"),
       ]);
-      setMotoristas(m); setVeiculos(v); setAbastecimentos(a);
+      setMotoristas(m); setVeiculos(v); setAbastecimentos(a); setChecklists(c);
     } catch (e) { setError("Erro ao carregar dados: " + e.message); }
     setLoading(false);
   };
 
   useEffect(() => { loadAll(); }, []);
+
   useEffect(() => {
     const handler = (e) => {
       if (logisticaRef.current && !logisticaRef.current.contains(e.target)) {
@@ -80,6 +140,20 @@ export default function App() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  // Preencher KM do último abastecimento ao selecionar veículo
+  useEffect(() => {
+    if (!ckVeiculoId) { setCkKm(""); return; }
+    const ultAbast = abastecimentos.find(a => a.veiculo_id === ckVeiculoId);
+    if (ultAbast) setCkKm(ultAbast.km_final);
+    else setCkKm("");
+  }, [ckVeiculoId, abastecimentos]);
+
+  // Resetar itens ao mudar tipo
+  useEffect(() => { setCkItens({}); }, [ckTipo]);
+
+  const veiculosFiltradosTipo = veiculos.filter(v => !ckTipo || v.tipo === ckTipo);
+  const itensChecklist = ckTipo === "Moto" ? ITENS_MOTO : ITENS_CARRO;
 
   const abastFiltrados = useMemo(() => {
     return abastecimentos.filter(r => {
@@ -97,17 +171,14 @@ export default function App() {
 
   const temFiltro = filtroDataInicio || filtroDataFim || filtroVeiculo || filtroMotorista || filtroTipo;
 
-  // Stats gerais por motorista
   const stats = useMemo(() => {
     const por = {};
     abastFiltrados.forEach(r => {
       const nome = r.motorista_nome || r.motorista_id;
       const km = r.km_final - r.km_inicial;
       if (!por[nome]) por[nome] = { km: 0, litros: 0, viagens: 0, gasto: 0 };
-      por[nome].km += km;
-      por[nome].litros += parseFloat(r.combustivel_litros);
-      por[nome].viagens += 1;
-      por[nome].gasto += parseFloat(r.valor_total || 0);
+      por[nome].km += km; por[nome].litros += parseFloat(r.combustivel_litros);
+      por[nome].viagens += 1; por[nome].gasto += parseFloat(r.valor_total || 0);
     });
     return Object.entries(por).map(([nome, d]) => ({
       nome, kmTotal: d.km, litros: d.litros,
@@ -116,7 +187,6 @@ export default function App() {
     })).sort((a, b) => b.kmTotal - a.kmTotal);
   }, [abastFiltrados]);
 
-  // Ranking por tipo → motoristas
   const rankingPorTipo = useMemo(() => {
     const tiposMap = {};
     abastFiltrados.forEach(r => {
@@ -126,24 +196,17 @@ export default function App() {
       const km = r.km_final - r.km_inicial;
       if (!tiposMap[tipo]) tiposMap[tipo] = {};
       if (!tiposMap[tipo][nome]) tiposMap[tipo][nome] = { km: 0, litros: 0, viagens: 0, gasto: 0 };
-      tiposMap[tipo][nome].km += km;
-      tiposMap[tipo][nome].litros += parseFloat(r.combustivel_litros);
-      tiposMap[tipo][nome].viagens += 1;
-      tiposMap[tipo][nome].gasto += parseFloat(r.valor_total || 0);
+      tiposMap[tipo][nome].km += km; tiposMap[tipo][nome].litros += parseFloat(r.combustivel_litros);
+      tiposMap[tipo][nome].viagens += 1; tiposMap[tipo][nome].gasto += parseFloat(r.valor_total || 0);
     });
-
     return Object.entries(tiposMap).map(([tipo, motoristasMap]) => {
       const lista = Object.entries(motoristasMap).map(([nome, d]) => ({
         nome, kmTotal: d.km, litros: d.litros,
         kml: d.litros > 0 ? (d.km / d.litros).toFixed(2) : "—",
         viagens: d.viagens, gasto: d.gasto,
       })).sort((a, b) => b.kmTotal - a.kmTotal);
-      const totalKmTipo = lista.reduce((s, m) => s + m.kmTotal, 0);
-      return { tipo, motoristas: lista, totalKm: totalKmTipo };
-    }).sort((a, b) => {
-      const order = ["Moto", "Carro", "Van", "Caminhão"];
-      return order.indexOf(a.tipo) - order.indexOf(b.tipo);
-    });
+      return { tipo, motoristas: lista, totalKm: lista.reduce((s, m) => s + m.kmTotal, 0) };
+    }).sort((a, b) => ["Moto","Carro","Van","Caminhão"].indexOf(a.tipo) - ["Moto","Carro","Van","Caminhão"].indexOf(b.tipo));
   }, [abastFiltrados, veiculos]);
 
   const totalKm = abastFiltrados.reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
@@ -153,36 +216,21 @@ export default function App() {
   const pieData = stats.map(s => ({ name: s.nome.split(" ")[0], value: s.kmTotal, fullName: s.nome }));
 
   const saveMotorista = async () => {
-    if (!formMotorista.nome) return;
-    setSaving(true);
-    try {
-      await api("motoristas", "POST", { ...formMotorista, ativo: true });
-      setFormMotorista(emptyMotorista); setShowMotoristaForm(false); await loadAll();
-    } catch (e) { setError(e.message); }
-    setSaving(false);
+    if (!formMotorista.nome) return; setSaving(true);
+    try { await api("motoristas", "POST", { ...formMotorista, ativo: true }); setFormMotorista(emptyMotorista); setShowMotoristaForm(false); await loadAll(); }
+    catch (e) { setError(e.message); } setSaving(false);
   };
 
   const saveVeiculo = async () => {
-    if (!formVeiculo.placa || !formVeiculo.modelo) return;
-    setSaving(true);
-    try {
-      await api("veiculos", "POST", { ...formVeiculo, ano: formVeiculo.ano ? parseInt(formVeiculo.ano) : null, ativo: true });
-      setFormVeiculo(emptyVeiculo); setShowVeiculoForm(false); await loadAll();
-    } catch (e) { setError(e.message); }
-    setSaving(false);
+    if (!formVeiculo.placa || !formVeiculo.modelo) return; setSaving(true);
+    try { await api("veiculos", "POST", { ...formVeiculo, ano: formVeiculo.ano ? parseInt(formVeiculo.ano) : null, ativo: true }); setFormVeiculo(emptyVeiculo); setShowVeiculoForm(false); await loadAll(); }
+    catch (e) { setError(e.message); } setSaving(false);
   };
 
   const updateVeiculo = async () => {
-    if (!editingVeiculo) return;
-    setSaving(true);
-    try {
-      await api(`veiculos?id=eq.${editingVeiculo.id}`, "PATCH", {
-        placa: editingVeiculo.placa, modelo: editingVeiculo.modelo,
-        ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null, tipo: editingVeiculo.tipo
-      });
-      setEditingVeiculo(null); await loadAll();
-    } catch (e) { setError(e.message); }
-    setSaving(false);
+    if (!editingVeiculo) return; setSaving(true);
+    try { await api(`veiculos?id=eq.${editingVeiculo.id}`, "PATCH", { placa: editingVeiculo.placa, modelo: editingVeiculo.modelo, ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null, tipo: editingVeiculo.tipo }); setEditingVeiculo(null); await loadAll(); }
+    catch (e) { setError(e.message); } setSaving(false);
   };
 
   const deleteVeiculo = async (id) => {
@@ -198,30 +246,88 @@ export default function App() {
     try {
       const mot = motoristas.find(m => m.id === motorista_id);
       const vei = veiculos.find(v => v.id === veiculo_id);
-      await api("abastecimentos", "POST", {
-        ...formAbast,
-        motorista_nome: mot?.nome || "",
-        veiculo_descricao: `${vei?.modelo || ""} - ${vei?.placa || ""}`,
-        km_inicial: parseFloat(km_inicial), km_final: parseFloat(km_final),
-        combustivel_litros: parseFloat(combustivel_litros),
-        valor_total: formAbast.valor_total ? parseFloat(formAbast.valor_total) : null,
-      });
+      await api("abastecimentos", "POST", { ...formAbast, motorista_nome: mot?.nome || "", veiculo_descricao: `${vei?.modelo || ""} - ${vei?.placa || ""}`, km_inicial: parseFloat(km_inicial), km_final: parseFloat(km_final), combustivel_litros: parseFloat(combustivel_litros), valor_total: formAbast.valor_total ? parseFloat(formAbast.valor_total) : null });
       setFormAbast(emptyAbast); setShowAbastForm(false); await loadAll();
+    } catch (e) { setError(e.message); } setSaving(false);
+  };
+
+  const saveChecklist = async () => {
+    if (!ckVeiculoId || !ckMotoristaId) { setError("Selecione veículo e motorista."); return; }
+    setCkSaving(true);
+    try {
+      const mot = motoristas.find(m => m.id === ckMotoristaId);
+      const vei = veiculos.find(v => v.id === ckVeiculoId);
+      await api("checklists", "POST", {
+        veiculo_id: ckVeiculoId, motorista_id: ckMotoristaId,
+        veiculo_descricao: `${vei?.modelo || ""} - ${vei?.placa || ""}`,
+        motorista_nome: mot?.nome || "", tipo_veiculo: ckTipo,
+        data: ckData, km: ckKm ? parseFloat(ckKm) : null,
+        itens: ckItens, observacao: ckObs,
+      });
+      setCkSuccess(true);
+      setTimeout(() => {
+        setCkSuccess(false); setCkTipo(""); setCkVeiculoId(""); setCkMotoristaId("");
+        setCkData(new Date().toISOString().split("T")[0]); setCkKm(""); setCkItens({}); setCkObs("");
+        loadAll();
+      }, 2000);
     } catch (e) { setError(e.message); }
-    setSaving(false);
+    setCkSaving(false);
+  };
+
+  // Gravação de áudio
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = e => audioChunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        await transcribeAudio(blob);
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+    } catch (e) { setError("Não foi possível acessar o microfone."); }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) { mediaRecorderRef.current.stop(); setRecording(false); }
+  };
+
+  const transcribeAudio = async (blob) => {
+    setTranscribing(true);
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = async () => {
+        const base64 = reader.result.split(",")[1];
+        const res = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514", max_tokens: 500,
+            messages: [{ role: "user", content: [
+              { type: "text", text: "Transcreva exatamente o que foi dito neste áudio. Retorne apenas a transcrição, sem comentários adicionais." },
+              { type: "image", source: { type: "base64", media_type: "audio/webm", data: base64 } }
+            ]}]
+          })
+        });
+        const data = await res.json();
+        const texto = data.content?.[0]?.text || "";
+        setCkObs(prev => prev ? prev + " " + texto : texto);
+        setTranscribing(false);
+      };
+    } catch { setTranscribing(false); setError("Erro na transcrição do áudio."); }
   };
 
   const runAI = async () => {
     setAiLoading(true); setAiAnalysis(""); setTab("ia");
-    const resumo = stats.map(s => `${s.nome}: ${s.kmTotal}km, ${s.kml} km/L, ${s.viagens} viagem(ns), ${s.litros.toFixed(0)}L${s.gasto > 0 ? `, R$${s.gasto.toFixed(2)}` : ""}`).join("\n");
-    const resumoTipo = rankingPorTipo.map(t => `${t.tipo} (${t.totalKm}km total):\n` + t.motoristas.map(m => `  - ${m.nome}: ${m.kmTotal}km, ${m.kml} km/L`).join("\n")).join("\n");
+    const resumo = stats.map(s => `${s.nome}: ${s.kmTotal}km, ${s.kml} km/L, ${s.viagens} viagem(ns)`).join("\n");
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          messages: [{ role: "user", content: `Você é especialista em gestão de frota. Analise e forneça insights em português:\n\nPor motorista:\n${resumo || "Nenhum."}\n\nPor tipo de veículo:\n${resumoTipo || "Nenhum."}\n\nTotais: ${totalKm}km, ${totalLitros.toFixed(0)}L, média ${mediaKml} km/L${totalGasto > 0 ? `, R$${totalGasto.toFixed(2)}` : ""}.\n\nForneça: 1) Insights de eficiência 2) Alertas 3) Recomendações. Use bullet points.` }]
-        })
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: `Você é especialista em gestão de frota. Analise e forneça insights:\n\n${resumo}\n\nTotais: ${totalKm}km, ${totalLitros.toFixed(0)}L, média ${mediaKml} km/L.\n\nForneça: 1) Insights 2) Alertas 3) Recomendações. Use bullet points.` }] })
       });
       const data = await res.json();
       setAiAnalysis(data.content?.[0]?.text || "Sem resposta.");
@@ -242,16 +348,14 @@ export default function App() {
   );
 
   const CustomTooltip = ({ active, payload }) => {
-    if (active && payload && payload.length) {
+    if (active && payload?.length) {
       const d = payload[0];
       const pct = totalKm > 0 ? ((d.value / totalKm) * 100).toFixed(1) : 0;
-      return (
-        <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
-          <div style={{ fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>{d.payload.fullName || d.payload.name}</div>
-          <div style={{ color: "#94a3b8" }}>{d.value.toLocaleString()} km</div>
-          <div style={{ color: d.fill, fontWeight: 600 }}>{pct}% do total</div>
-        </div>
-      );
+      return <div style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
+        <div style={{ fontWeight: 600, color: "#f1f5f9", marginBottom: 4 }}>{d.payload.fullName || d.payload.name}</div>
+        <div style={{ color: "#94a3b8" }}>{d.value.toLocaleString()} km</div>
+        <div style={{ color: d.fill, fontWeight: 600 }}>{pct}% do total</div>
+      </div>;
     }
     return null;
   };
@@ -261,6 +365,9 @@ export default function App() {
       {label}
     </button>
   );
+
+  const itensMarcados = Object.values(ckItens).filter(Boolean).length;
+  const totalItens = itensChecklist.length;
 
   return (
     <div style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#0a0f1a", minHeight: "100vh", color: "#e2e8f0" }}>
@@ -286,6 +393,7 @@ export default function App() {
               <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: 6, zIndex: 200, minWidth: 200, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}>
                 {navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
                 {navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
+                {navBtn("✅ Checklist", tab === "checklist", () => { setTab("checklist"); setLogisticaOpen(false); })}
                 <div>
                   <button onClick={() => setCadastroOpen(!cadastroOpen)}
                     style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
@@ -314,34 +422,224 @@ export default function App() {
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 16px" }}>
         {loading && <div style={{ textAlign: "center", padding: 60, color: "#475569" }}>Carregando...</div>}
 
+        {/* ===== CHECKLIST ===== */}
+        {!loading && tab === "checklist" && (
+          <div>
+            {/* Tabs form/histórico */}
+            <div style={{ display: "flex", gap: 4, background: "#0f172a", borderRadius: 12, padding: 4, marginBottom: 24, border: "1px solid #1e293b", width: "fit-content" }}>
+              {[["form","✅ Novo Checklist"],["history","📋 Histórico"]].map(([k,l]) => (
+                <button key={k} onClick={() => setCkView(k)} style={{ padding: "7px 18px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 500, background: ckView === k ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: ckView === k ? "#fff" : "#64748b" }}>{l}</button>
+              ))}
+            </div>
+
+            {ckView === "form" && (
+              <div>
+                {ckSuccess && (
+                  <div style={{ background: "rgba(16,185,129,0.15)", border: "1px solid rgba(16,185,129,0.3)", borderRadius: 12, padding: "16px 20px", marginBottom: 20, textAlign: "center", color: "#10b981", fontWeight: 600, fontSize: 15 }}>
+                    ✅ Checklist salvo com sucesso!
+                  </div>
+                )}
+
+                {/* Step 1: Seleção */}
+                <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: "#f1f5f9", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 24, height: 24, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>1</span>
+                    Informações do Veículo
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
+                    <div>
+                      <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tipo de Veículo</label>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {TIPOS.map(t => (
+                          <button key={t} onClick={() => { setCkTipo(t); setCkVeiculoId(""); }}
+                            style={{ flex: 1, padding: "8px 4px", borderRadius: 8, border: `1px solid ${ckTipo === t ? TIPO_COLOR[t] : "#334155"}`, cursor: "pointer", fontSize: 11, fontWeight: 600, background: ckTipo === t ? `${TIPO_COLOR[t]}20` : "#1e293b", color: ckTipo === t ? TIPO_COLOR[t] : "#64748b", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                            <span style={{ fontSize: 16 }}>{TIPO_ICON[t]}</span>
+                            <span>{t}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Placa / Veículo</label>
+                      {sel(ckVeiculoId, setCkVeiculoId, <><option value="">Selecione...</option>{veiculosFiltradosTipo.map(v => <option key={v.id} value={v.id}>{TIPO_ICON[v.tipo]||""} {v.modelo} - {v.placa}</option>)}</>)}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Motorista</label>
+                      {sel(ckMotoristaId, setCkMotoristaId, <><option value="">Selecione...</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}</>)}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Data</label>
+                      {inp(ckData, setCkData, "", "date")}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>KM do Veículo {ckKm && <span style={{ color: "#475569", fontWeight: 400 }}>(pré-setado)</span>}</label>
+                      {inp(ckKm, setCkKm, "Ex: 42500", "number")}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Step 2: Itens */}
+                {ckTipo && (
+                  <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, color: "#f1f5f9", display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 24, height: 24, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>2</span>
+                        Itens de Verificação {TIPO_ICON[ckTipo]}
+                      </div>
+                      <div style={{ fontSize: 12, color: itensMarcados === totalItens ? "#10b981" : "#64748b", fontWeight: 600 }}>
+                        {itensMarcados}/{totalItens} verificados
+                      </div>
+                    </div>
+
+                    {/* Barra de progresso */}
+                    <div style={{ height: 6, background: "#1e293b", borderRadius: 99, marginBottom: 20, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${(itensMarcados/totalItens)*100}%`, background: itensMarcados === totalItens ? "#10b981" : "linear-gradient(90deg,#06b6d4,#3b82f6)", borderRadius: 99, transition: "width 0.3s ease" }} />
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 10 }}>
+                      {itensChecklist.map(item => {
+                        const checked = ckItens[item.id] === true;
+                        const nok = ckItens[item.id] === false;
+                        return (
+                          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 10, border: `1px solid ${checked ? "rgba(16,185,129,0.3)" : nok ? "rgba(248,113,113,0.3)" : "#334155"}`, background: checked ? "rgba(16,185,129,0.05)" : nok ? "rgba(248,113,113,0.05)" : "#1e293b", cursor: "pointer" }}>
+                            <span style={{ fontSize: 13, color: "#cbd5e1", flex: 1 }}>{item.label}</span>
+                            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                              <button onClick={() => setCkItens(p => ({ ...p, [item.id]: true }))}
+                                style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, background: checked ? "#10b981" : "#334155", color: "#fff", fontWeight: 700, transition: "all 0.15s" }}>✓</button>
+                              <button onClick={() => setCkItens(p => ({ ...p, [item.id]: false }))}
+                                style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, background: nok ? "#ef4444" : "#334155", color: "#fff", fontWeight: 700, transition: "all 0.15s" }}>✗</button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Marcar todos */}
+                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                      <button onClick={() => { const all = {}; itensChecklist.forEach(i => all[i.id] = true); setCkItens(all); }}
+                        style={{ fontSize: 12, color: "#10b981", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 8, padding: "5px 12px", cursor: "pointer" }}>
+                        ✓ Marcar todos como OK
+                      </button>
+                      <button onClick={() => setCkItens({})}
+                        style={{ fontSize: 12, color: "#64748b", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "5px 12px", cursor: "pointer" }}>
+                        Limpar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Observação com áudio */}
+                <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: "#f1f5f9", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 24, height: 24, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>3</span>
+                    Observações
+                  </div>
+
+                  <textarea value={ckObs} onChange={e => setCkObs(e.target.value)} placeholder="Digite ou grave uma observação..."
+                    style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "12px 14px", color: "#f1f5f9", fontSize: 13, outline: "none", resize: "vertical", minHeight: 80, boxSizing: "border-box", fontFamily: "inherit" }} />
+
+                  {/* Botão de áudio */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
+                    {!recording ? (
+                      <button onClick={startRecording} disabled={transcribing}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "linear-gradient(135deg,#ef4444,#dc2626)", color: "#fff", opacity: transcribing ? 0.6 : 1 }}>
+                        🎙️ {transcribing ? "Transcrevendo..." : "Gravar Áudio"}
+                      </button>
+                    ) : (
+                      <button onClick={stopRecording}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "#1e293b", border: "1px solid #ef4444", color: "#ef4444" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", animation: "pulse 1s infinite" }} />
+                        Gravando... (clique para parar)
+                      </button>
+                    )}
+                    {transcribing && <span style={{ fontSize: 12, color: "#64748b" }}>Transcrevendo áudio com IA...</span>}
+                  </div>
+                  <p style={{ fontSize: 11, color: "#475569", marginTop: 8 }}>💡 Grave um áudio descrevendo problemas ou observações — a IA transcreve automaticamente</p>
+                </div>
+
+                {/* Botão salvar */}
+                <button onClick={saveChecklist} disabled={ckSaving || !ckVeiculoId || !ckMotoristaId}
+                  style={{ width: "100%", padding: "14px", borderRadius: 12, border: "none", cursor: !ckVeiculoId || !ckMotoristaId ? "not-allowed" : "pointer", fontSize: 15, fontWeight: 700, background: !ckVeiculoId || !ckMotoristaId ? "#1e293b" : "linear-gradient(135deg,#06b6d4,#3b82f6)", color: !ckVeiculoId || !ckMotoristaId ? "#475569" : "#fff", opacity: ckSaving ? 0.7 : 1, transition: "all 0.2s" }}>
+                  {ckSaving ? "Salvando..." : "✅ Salvar Checklist"}
+                </button>
+              </div>
+            )}
+
+            {/* Histórico */}
+            {ckView === "history" && (
+              <div>
+                {checklists.length === 0
+                  ? <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 40, textAlign: "center", color: "#475569" }}>Nenhum checklist registrado ainda.</div>
+                  : checklists.map((c, i) => {
+                    const itens = c.itens || {};
+                    const total = Object.keys(itens).length;
+                    const ok = Object.values(itens).filter(v => v === true).length;
+                    const nok = Object.values(itens).filter(v => v === false).length;
+                    const [expanded, setExpanded] = useState ? useState(false) : [false, () => {}];
+                    return (
+                      <div key={c.id} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
+                        <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }} onClick={() => {
+                          const el = document.getElementById(`ck-detail-${c.id}`);
+                          if (el) el.style.display = el.style.display === "none" ? "block" : "none";
+                        }}>
+                          <div style={{ width: 38, height: 38, borderRadius: 10, background: `${TIPO_COLOR[c.tipo_veiculo] || "#334155"}20`, border: `1px solid ${TIPO_COLOR[c.tipo_veiculo] || "#334155"}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{TIPO_ICON[c.tipo_veiculo] || "🚘"}</div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: "#f1f5f9" }}>{c.veiculo_descricao}</div>
+                            <div style={{ fontSize: 11, color: "#475569" }}>{c.motorista_nome} · {c.data}{c.km ? ` · ${parseFloat(c.km).toLocaleString()} km` : ""}</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            {nok > 0 && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(248,113,113,0.15)", color: "#f87171", fontWeight: 600 }}>{nok} ✗</span>}
+                            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: "rgba(16,185,129,0.15)", color: "#10b981", fontWeight: 600 }}>{ok} ✓</span>
+                            <span style={{ color: "#475569", fontSize: 12 }}>▼</span>
+                          </div>
+                        </div>
+                        <div id={`ck-detail-${c.id}`} style={{ display: "none", padding: "0 18px 16px", borderTop: "1px solid #1e293b" }}>
+                          {total > 0 && (
+                            <div style={{ paddingTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 6, marginBottom: 12 }}>
+                              {Object.entries(itens).map(([id, val]) => {
+                                const item = [...ITENS_CARRO, ...ITENS_MOTO].find(x => x.id === id);
+                                return (
+                                  <div key={id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: val ? "#94a3b8" : "#f87171" }}>
+                                    <span>{val ? "✅" : "❌"}</span>
+                                    <span>{item?.label || id}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {c.observacao && (
+                            <div style={{ background: "#1e293b", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#cbd5e1" }}>
+                              <span style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>Obs: </span>{c.observacao}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                }
+              </div>
+            )}
+          </div>
+        )}
+
         {/* DASHBOARD */}
         {!loading && tab === "dashboard" && (
           <div>
-            {/* Filtros */}
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: "16px 20px", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", display: "flex", alignItems: "center", gap: 6 }}>
-                  🔍 Filtros
-                  {temFiltro && <span style={{ fontSize: 10, background: "rgba(6,182,212,0.2)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)", borderRadius: 99, padding: "2px 8px" }}>ativos</span>}
+                  🔍 Filtros {temFiltro && <span style={{ fontSize: 10, background: "rgba(6,182,212,0.2)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)", borderRadius: 99, padding: "2px 8px" }}>ativos</span>}
                 </div>
-                {temFiltro && <button onClick={() => { setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroVeiculo(""); setFiltroMotorista(""); setFiltroTipo(""); }} style={{ fontSize: 11, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>✕ Limpar filtros</button>}
+                {temFiltro && <button onClick={() => { setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroVeiculo(""); setFiltroMotorista(""); setFiltroTipo(""); }} style={{ fontSize: 11, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>✕ Limpar</button>}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
-                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Data Início</label>{inp(filtroDataInicio, setFiltroDataInicio, "", "date")}</div>
-                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Data Fim</label>{inp(filtroDataFim, setFiltroDataFim, "", "date")}</div>
-                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Tipo de Veículo</label>
-                  {sel(filtroTipo, setFiltroTipo, <><option value="">Todos os tipos</option>{TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}</>)}
-                </div>
-                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Veículo</label>
-                  {sel(filtroVeiculo, setFiltroVeiculo, <><option value="">Todos os veículos</option>{veiculos.filter(v => !filtroTipo || v.tipo === filtroTipo).map(v => <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>)}</>)}
-                </div>
-                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Motorista</label>
-                  {sel(filtroMotorista, setFiltroMotorista, <><option value="">Todos os motoristas</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}</>)}
-                </div>
+                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Data Início</label>{inp(filtroDataInicio, setFiltroDataInicio, "", "date")}</div>
+                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Data Fim</label>{inp(filtroDataFim, setFiltroDataFim, "", "date")}</div>
+                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Tipo</label>{sel(filtroTipo, setFiltroTipo, <><option value="">Todos</option>{TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}</>)}</div>
+                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Veículo</label>{sel(filtroVeiculo, setFiltroVeiculo, <><option value="">Todos</option>{veiculos.filter(v => !filtroTipo || v.tipo === filtroTipo).map(v => <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>)}</>)}</div>
+                <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Motorista</label>{sel(filtroMotorista, setFiltroMotorista, <><option value="">Todos</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}</>)}</div>
               </div>
             </div>
-
-            {/* Cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 20 }}>
               {[["Total KM",totalKm.toLocaleString()+" km","#06b6d4","rgba(6,182,212,0.15)","rgba(6,182,212,0.25)"],["Combustível",totalLitros.toFixed(0)+" L","#fbbf24","rgba(251,191,36,0.15)","rgba(251,191,36,0.25)"],["Média Frota",mediaKml+" km/L","#10b981","rgba(16,185,129,0.15)","rgba(16,185,129,0.25)"],["Gasto Total",totalGasto>0?"R$ "+totalGasto.toFixed(2):"—","#a78bfa","rgba(167,139,250,0.15)","rgba(167,139,250,0.25)"]].map(([label,val,color,bg,border]) => (
                 <div key={label} style={{ background:`linear-gradient(135deg,${bg},transparent)`, border:`1px solid ${border}`, borderRadius:16, padding:"16px 18px" }}>
@@ -350,116 +648,67 @@ export default function App() {
                 </div>
               ))}
             </div>
-
             {stats.length === 0
-              ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro encontrado{temFiltro?" para os filtros selecionados":""}.</div>
+              ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro encontrado.</div>
               : <>
-                  {/* Pizza motoristas + Ranking geral */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
-                    <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
-                      <div style={{ fontWeight:600, fontSize:14, color:"#f1f5f9", marginBottom:16 }}>🥧 KM por Motorista</div>
-                      <ResponsiveContainer width="100%" height={240}>
-                        <PieChart>
-                          <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                            {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                          </Pie>
-                          <Tooltip content={<CustomTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:8 }}>
-                        {pieData.map((d,i) => (
-                          <div key={d.name} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11 }}>
-                            <div style={{ width:8, height:8, borderRadius:"50%", background:COLORS[i%COLORS.length], flexShrink:0 }} />
-                            <span style={{ color:"#94a3b8" }}>{d.fullName}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
-                      <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e293b", fontWeight:600, fontSize:14, color:"#f1f5f9" }}>🏆 Ranking Geral de Motoristas</div>
-                      <div style={{ overflowY:"auto", maxHeight:320 }}>
-                        {stats.map((s,i) => {
-                          const kmlN = parseFloat(s.kml);
-                          const pct = stats[0].kmTotal > 0 ? (s.kmTotal/stats[0].kmTotal)*100 : 0;
-                          return (
-                            <div key={s.nome} style={{ padding:"12px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
-                              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:7 }}>
-                                <div style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0, background:i===0?"linear-gradient(135deg,#fbbf24,#f59e0b)":i===1?"linear-gradient(135deg,#94a3b8,#64748b)":i===2?"linear-gradient(135deg,#b45309,#92400e)":"#1e293b", color:"#fff" }}>{i+1}</div>
-                                <div style={{ flex:1 }}>
-                                  <div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9" }}>{s.nome}</div>
-                                  <div style={{ fontSize:10, color:"#475569" }}>{s.viagens} viagem{s.viagens>1?"s":""} · {s.litros.toFixed(0)}L{s.gasto>0?" · R$"+s.gasto.toFixed(2):""}</div>
-                                </div>
-                                <div style={{ textAlign:"right" }}>
-                                  <div style={{ fontSize:13, fontWeight:700, color:"#e2e8f0" }}>{s.kmTotal.toLocaleString()} km</div>
-                                  <div style={{ fontSize:11, fontWeight:600, color:!isNaN(kmlN)?(kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171"):"#64748b" }}>{s.kml} km/L</div>
-                                </div>
-                              </div>
-                              <div style={{ height:4, background:"#1e293b", borderRadius:99 }}>
-                                <div style={{ height:"100%", width:`${pct}%`, background:COLORS[i%COLORS.length], borderRadius:99, transition:"width 0.6s ease" }} />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+                  <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
+                    <div style={{ fontWeight:600, fontSize:14, color:"#f1f5f9", marginBottom:16 }}>🥧 KM por Motorista</div>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">{pieData.map((_, i) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}</Pie><Tooltip content={<CustomTooltip />} /></PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:"6px 14px", marginTop:8 }}>
+                      {pieData.map((d,i) => <div key={d.name} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11 }}><div style={{ width:8, height:8, borderRadius:"50%", background:COLORS[i%COLORS.length] }} /><span style={{ color:"#94a3b8" }}>{d.fullName}</span></div>)}
                     </div>
                   </div>
-
-                  {/* Ranking por tipo de veículo → motoristas */}
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, fontSize: 15, color: "#f1f5f9", marginBottom: 14, display: "flex", alignItems: "center", gap: 8 }}>
-                      📊 Ranking de Motoristas por Tipo de Veículo
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 16 }}>
-                      {rankingPorTipo.map(({ tipo, motoristas: lista, totalKm: totalKmTipo }) => {
-                        const cor = TIPO_COLOR[tipo] || "#64748b";
-                        return (
-                          <div key={tipo} style={{ background: "#0f172a", border: `1px solid ${cor}30`, borderRadius: 16, overflow: "hidden" }}>
-                            {/* Header do tipo */}
-                            <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "space-between", background: `${cor}10` }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                <div style={{ width: 34, height: 34, borderRadius: 10, background: `${cor}20`, border: `1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{TIPO_ICON[tipo] || "🚘"}</div>
-                                <div>
-                                  <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>{tipo}</div>
-                                  <div style={{ fontSize: 11, color: "#64748b" }}>{lista.length} motorista{lista.length > 1 ? "s" : ""}</div>
-                                </div>
-                              </div>
-                              <div style={{ textAlign: "right" }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: cor }}>{totalKmTipo.toLocaleString()} km</div>
-                                <div style={{ fontSize: 10, color: "#64748b" }}>total rodado</div>
-                              </div>
-                            </div>
-
-                            {/* Motoristas do tipo */}
-                            {lista.map((m, i) => {
-                              const kmlN = parseFloat(m.kml);
-                              const pct = lista[0].kmTotal > 0 ? (m.kmTotal / lista[0].kmTotal) * 100 : 0;
-                              return (
-                                <div key={m.nome} style={{ padding: "12px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                                    {/* Posição */}
-                                    <div style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, flexShrink: 0, background: i === 0 ? "linear-gradient(135deg,#fbbf24,#f59e0b)" : i === 1 ? "linear-gradient(135deg,#94a3b8,#64748b)" : i === 2 ? "linear-gradient(135deg,#b45309,#92400e)" : "#1e293b", color: "#fff" }}>{i + 1}</div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
-                                      <div style={{ fontSize: 10, color: "#475569" }}>{m.viagens} viagem{m.viagens > 1 ? "s" : ""} · {m.litros.toFixed(0)}L{m.gasto > 0 ? " · R$" + m.gasto.toFixed(2) : ""}</div>
-                                    </div>
-                                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                      <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>{m.kmTotal.toLocaleString()} km</div>
-                                      <div style={{ fontSize: 11, fontWeight: 600, color: !isNaN(kmlN) ? (kmlN >= 11 ? "#10b981" : kmlN >= 9 ? "#fbbf24" : "#f87171") : "#64748b" }}>{m.kml} km/L</div>
-                                    </div>
-                                  </div>
-                                  <div style={{ height: 3, background: "#1e293b", borderRadius: 99 }}>
-                                    <div style={{ height: "100%", width: `${pct}%`, background: cor, borderRadius: 99, transition: "width 0.6s ease", opacity: 0.8 }} />
-                                  </div>
-                                </div>
-                              );
-                            })}
+                  <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
+                    <div style={{ padding:"16px 20px", borderBottom:"1px solid #1e293b", fontWeight:600, fontSize:14, color:"#f1f5f9" }}>🏆 Ranking Geral</div>
+                    <div style={{ overflowY:"auto", maxHeight:320 }}>
+                      {stats.map((s,i) => {
+                        const kmlN = parseFloat(s.kml);
+                        const pct = stats[0].kmTotal > 0 ? (s.kmTotal/stats[0].kmTotal)*100 : 0;
+                        return <div key={s.nome} style={{ padding:"12px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:7 }}>
+                            <div style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0, background:i===0?"linear-gradient(135deg,#fbbf24,#f59e0b)":i===1?"linear-gradient(135deg,#94a3b8,#64748b)":i===2?"linear-gradient(135deg,#b45309,#92400e)":"#1e293b", color:"#fff" }}>{i+1}</div>
+                            <div style={{ flex:1 }}><div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9" }}>{s.nome}</div><div style={{ fontSize:10, color:"#475569" }}>{s.viagens} viagem{s.viagens>1?"s":""} · {s.litros.toFixed(0)}L</div></div>
+                            <div style={{ textAlign:"right" }}><div style={{ fontSize:13, fontWeight:700, color:"#e2e8f0" }}>{s.kmTotal.toLocaleString()} km</div><div style={{ fontSize:11, fontWeight:600, color:!isNaN(kmlN)?(kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171"):"#64748b" }}>{s.kml} km/L</div></div>
                           </div>
-                        );
+                          <div style={{ height:4, background:"#1e293b", borderRadius:99 }}><div style={{ height:"100%", width:`${pct}%`, background:COLORS[i%COLORS.length], borderRadius:99 }} /></div>
+                        </div>;
                       })}
                     </div>
                   </div>
-                </>
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  <div style={{ fontWeight:600, fontSize:15, color:"#f1f5f9", marginBottom:14 }}>📊 Ranking por Tipo de Veículo</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))", gap:16 }}>
+                    {rankingPorTipo.map(({ tipo, motoristas: lista, totalKm: totalKmTipo }) => {
+                      const cor = TIPO_COLOR[tipo] || "#64748b";
+                      return <div key={tipo} style={{ background:"#0f172a", border:`1px solid ${cor}30`, borderRadius:16, overflow:"hidden" }}>
+                        <div style={{ padding:"14px 20px", borderBottom:"1px solid #1e293b", display:"flex", alignItems:"center", justifyContent:"space-between", background:`${cor}10` }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <div style={{ width:34, height:34, borderRadius:10, background:`${cor}20`, border:`1px solid ${cor}40`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{TIPO_ICON[tipo]||"🚘"}</div>
+                            <div><div style={{ fontWeight:700, fontSize:14, color:"#f1f5f9" }}>{tipo}</div><div style={{ fontSize:11, color:"#64748b" }}>{lista.length} motorista{lista.length>1?"s":""}</div></div>
+                          </div>
+                          <div style={{ textAlign:"right" }}><div style={{ fontSize:13, fontWeight:700, color:cor }}>{totalKmTipo.toLocaleString()} km</div><div style={{ fontSize:10, color:"#64748b" }}>total rodado</div></div>
+                        </div>
+                        {lista.map((m,i) => {
+                          const kmlN = parseFloat(m.kml);
+                          const pct = lista[0].kmTotal > 0 ? (m.kmTotal/lista[0].kmTotal)*100 : 0;
+                          return <div key={m.nome} style={{ padding:"12px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                              <div style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0, background:i===0?"linear-gradient(135deg,#fbbf24,#f59e0b)":i===1?"linear-gradient(135deg,#94a3b8,#64748b)":i===2?"linear-gradient(135deg,#b45309,#92400e)":"#1e293b", color:"#fff" }}>{i+1}</div>
+                              <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.nome}</div><div style={{ fontSize:10, color:"#475569" }}>{m.viagens} viagem{m.viagens>1?"s":""} · {m.litros.toFixed(0)}L</div></div>
+                              <div style={{ textAlign:"right", flexShrink:0 }}><div style={{ fontSize:13, fontWeight:700, color:"#e2e8f0" }}>{m.kmTotal.toLocaleString()} km</div><div style={{ fontSize:11, fontWeight:600, color:!isNaN(kmlN)?(kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171"):"#64748b" }}>{m.kml} km/L</div></div>
+                            </div>
+                            <div style={{ height:3, background:"#1e293b", borderRadius:99 }}><div style={{ height:"100%", width:`${pct}%`, background:cor, borderRadius:99, opacity:0.8 }} /></div>
+                          </div>;
+                        })}
+                      </div>;
+                    })}
+                  </div>
+                </div>
+              </>
             }
           </div>
         )}
@@ -491,32 +740,29 @@ export default function App() {
                 <button onClick={saveAbast} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", opacity:saving?0.6:1 }}>{saving?"Salvando...":"Salvar"}</button>
               </div>
             )}
-            {abastecimentos.length === 0
-              ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro ainda.</div>
+            {abastecimentos.length === 0 ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro ainda.</div>
               : <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflowX:"auto" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                    <thead><tr style={{ background:"#0a0f1a" }}>{["Data","Motorista","Veículo","KM Ini","KM Fim","KM Rod","Litros","km/L","Preço/L","Valor Total"].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
-                    <tbody>{abastecimentos.map((r,i) => {
-                      const km = r.km_final - r.km_inicial;
-                      const litros = parseFloat(r.combustivel_litros);
-                      const kml = (km/litros).toFixed(2);
-                      const kmlN = parseFloat(kml);
-                      const precoLitro = r.valor_total ? (parseFloat(r.valor_total)/litros).toFixed(2) : null;
-                      return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
-                        <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{r.motorista_nome}</td>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
-                        <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
-                        <td style={{ padding:"10px 14px", fontWeight:600, color:"#06b6d4" }}>{km.toLocaleString()}</td>
-                        <td style={{ padding:"10px 14px", color:"#fbbf24" }}>{litros}L</td>
-                        <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:kmlN>=11?"rgba(16,185,129,0.15)":kmlN>=9?"rgba(251,191,36,0.15)":"rgba(248,113,113,0.15)", color:kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171" }}>{kml}</span></td>
-                        <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro?"R$ "+precoLitro:"—"}</td>
-                        <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
-                      </tr>;
-                    })}</tbody>
-                  </table>
-                </div>
+                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                  <thead><tr style={{ background:"#0a0f1a" }}>{["Data","Motorista","Veículo","KM Ini","KM Fim","KM Rod","Litros","km/L","Preço/L","Valor Total"].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                  <tbody>{abastecimentos.map((r,i) => {
+                    const km = r.km_final - r.km_inicial; const litros = parseFloat(r.combustivel_litros);
+                    const kml = (km/litros).toFixed(2); const kmlN = parseFloat(kml);
+                    const precoLitro = r.valor_total ? (parseFloat(r.valor_total)/litros).toFixed(2) : null;
+                    return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
+                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
+                      <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{r.motorista_nome}</td>
+                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
+                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
+                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
+                      <td style={{ padding:"10px 14px", fontWeight:600, color:"#06b6d4" }}>{km.toLocaleString()}</td>
+                      <td style={{ padding:"10px 14px", color:"#fbbf24" }}>{litros}L</td>
+                      <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:kmlN>=11?"rgba(16,185,129,0.15)":kmlN>=9?"rgba(251,191,36,0.15)":"rgba(248,113,113,0.15)", color:kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171" }}>{kml}</span></td>
+                      <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro?"R$ "+precoLitro:"—"}</td>
+                      <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
             }
           </div>
         )}
@@ -538,9 +784,9 @@ export default function App() {
             <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
               {motoristas.length === 0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Nenhum motorista cadastrado.</div>
                 : motoristas.map((m,i) => <div key={m.id} style={{ padding:"14px 18px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:12 }}>
-                    <div style={{ width:36, height:36, background:"linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>👤</div>
-                    <div><div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14 }}>{m.nome}</div><div style={{ fontSize:11, color:"#475569" }}>{m.cnh?`CNH: ${m.cnh}`:""}{m.telefone?` · ${m.telefone}`:""}</div></div>
-                  </div>)}
+                  <div style={{ width:36, height:36, background:"linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>👤</div>
+                  <div><div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14 }}>{m.nome}</div><div style={{ fontSize:11, color:"#475569" }}>{m.cnh?`CNH: ${m.cnh}`:""}{m.telefone?` · ${m.telefone}`:""}</div></div>
+                </div>)}
             </div>
           </div>
         )}
@@ -578,18 +824,14 @@ export default function App() {
                           Placa: {v.placa}{v.ano?` · ${v.ano}`:""}
                         </div>
                       </div>
-                      <button onClick={() => { setEditingVeiculo(editingVeiculo?.id === v.id ? null : {...v}); setShowVeiculoForm(false); }}
-                        style={{ background: editingVeiculo?.id === v.id ? "#334155" : "#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer" }}>
-                        {editingVeiculo?.id === v.id ? "✕ Fechar" : "✏️ Editar"}
-                      </button>
+                      <button onClick={() => { setEditingVeiculo(editingVeiculo?.id === v.id ? null : {...v}); setShowVeiculoForm(false); }} style={{ background:editingVeiculo?.id===v.id?"#334155":"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer" }}>{editingVeiculo?.id===v.id?"✕ Fechar":"✏️ Editar"}</button>
                       <button onClick={() => deleteVeiculo(v.id)} style={{ background:"rgba(220,38,38,0.1)", border:"1px solid rgba(220,38,38,0.2)", color:"#f87171", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer" }}>🗑️</button>
                     </div>
                     {editingVeiculo?.id === v.id && (
                       <div style={{ padding:"16px 18px", background:"#0a0f1a", borderTop:"1px solid #1e293b" }}>
                         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:12 }}>
                           <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Tipo</label>
-                            <select value={editingVeiculo.tipo || ""} onChange={e => setEditingVeiculo(p => ({...p,tipo:e.target.value}))}
-                              style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
+                            <select value={editingVeiculo.tipo||""} onChange={e => setEditingVeiculo(p => ({...p,tipo:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
                               <option value="">Selecione...</option>{TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
                             </select>
                           </div>
@@ -626,6 +868,7 @@ export default function App() {
           </div>
         )}
       </div>
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
     </div>
   );
 }
