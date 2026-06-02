@@ -103,11 +103,9 @@ export default function App() {
   const [ckSaving, setCkSaving] = useState(false);
   const [ckSuccess, setCkSuccess] = useState(false);
   const [ckView, setCkView] = useState("form"); // "form" | "history"
-  // Audio
+  // Audio - Web Speech API
   const [recording, setRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
+  const recognitionRef = useRef(null);
 
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
@@ -275,50 +273,29 @@ export default function App() {
   };
 
   // Gravação de áudio
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-      const mr = new MediaRecorder(stream);
-      mr.ondataavailable = e => audioChunksRef.current.push(e.data);
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        await transcribeAudio(blob);
-      };
-      mr.start();
-      mediaRecorderRef.current = mr;
-      setRecording(true);
-    } catch (e) { setError("Não foi possível acessar o microfone."); }
+  const startRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setError("Seu navegador não suporta gravação de voz. Use o Chrome.");
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = "pt-BR";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.onresult = (e) => {
+      const texto = Array.from(e.results).map(r => r[0].transcript).join(" ");
+      setCkObs(prev => prev ? prev + " " + texto : texto);
+    };
+    recognition.onerror = () => setError("Erro ao gravar áudio. Verifique o microfone.");
+    recognition.onend = () => setRecording(false);
+    recognition.start();
+    recognitionRef.current = recognition;
+    setRecording(true);
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current) { mediaRecorderRef.current.stop(); setRecording(false); }
-  };
-
-  const transcribeAudio = async (blob) => {
-    setTranscribing(true);
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = async () => {
-        const base64 = reader.result.split(",")[1];
-        const res = await fetch("https://api.anthropic.com/v1/messages", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-20250514", max_tokens: 500,
-            messages: [{ role: "user", content: [
-              { type: "text", text: "Transcreva exatamente o que foi dito neste áudio. Retorne apenas a transcrição, sem comentários adicionais." },
-              { type: "image", source: { type: "base64", media_type: "audio/webm", data: base64 } }
-            ]}]
-          })
-        });
-        const data = await res.json();
-        const texto = data.content?.[0]?.text || "";
-        setCkObs(prev => prev ? prev + " " + texto : texto);
-        setTranscribing(false);
-      };
-    } catch { setTranscribing(false); setError("Erro na transcrição do áudio."); }
+    if (recognitionRef.current) { recognitionRef.current.stop(); setRecording(false); }
   };
 
   const runAI = async () => {
@@ -501,13 +478,17 @@ export default function App() {
                         const checked = ckItens[item.id] === true;
                         const nok = ckItens[item.id] === false;
                         return (
-                          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 10, border: `1px solid ${checked ? "rgba(16,185,129,0.3)" : nok ? "rgba(248,113,113,0.3)" : "#334155"}`, background: checked ? "rgba(16,185,129,0.05)" : nok ? "rgba(248,113,113,0.05)" : "#1e293b", cursor: "pointer" }}>
+                          <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", borderRadius: 10, border: `1px solid ${checked ? "rgba(16,185,129,0.3)" : nok ? "rgba(248,113,113,0.3)" : "#334155"}`, background: checked ? "rgba(16,185,129,0.05)" : nok ? "rgba(248,113,113,0.05)" : "#1e293b" }}>
                             <span style={{ fontSize: 13, color: "#cbd5e1", flex: 1 }}>{item.label}</span>
                             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                              <button onClick={() => setCkItens(p => ({ ...p, [item.id]: true }))}
-                                style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, background: checked ? "#10b981" : "#334155", color: "#fff", fontWeight: 700, transition: "all 0.15s" }}>✓</button>
-                              <button onClick={() => setCkItens(p => ({ ...p, [item.id]: false }))}
-                                style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, background: nok ? "#ef4444" : "#334155", color: "#fff", fontWeight: 700, transition: "all 0.15s" }}>✗</button>
+                              <button
+                                onClick={() => setCkItens(p => ({ ...p, [item.id]: p[item.id] === true ? undefined : true }))}
+                                style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, background: checked ? "#10b981" : "#334155", color: "#fff", fontWeight: 700, transition: "all 0.15s" }}
+                                title="OK (clique novamente para desmarcar">✓</button>
+                              <button
+                                onClick={() => setCkItens(p => ({ ...p, [item.id]: p[item.id] === false ? undefined : false }))}
+                                style={{ width: 32, height: 32, borderRadius: 8, border: "none", cursor: "pointer", fontSize: 14, background: nok ? "#ef4444" : "#334155", color: "#fff", fontWeight: 700, transition: "all 0.15s" }}
+                                title="Com problema (clique novamente para desmarcar)">✗</button>
                             </div>
                           </div>
                         );
@@ -541,20 +522,19 @@ export default function App() {
                   {/* Botão de áudio */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12 }}>
                     {!recording ? (
-                      <button onClick={startRecording} disabled={transcribing}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "linear-gradient(135deg,#ef4444,#dc2626)", color: "#fff", opacity: transcribing ? 0.6 : 1 }}>
-                        🎙️ {transcribing ? "Transcrevendo..." : "Gravar Áudio"}
+                      <button onClick={startRecording}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "linear-gradient(135deg,#ef4444,#dc2626)", color: "#fff" }}>
+                        🎙️ Gravar Áudio
                       </button>
                     ) : (
                       <button onClick={stopRecording}
-                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "#1e293b", border: "1px solid #ef4444", color: "#ef4444" }}>
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", animation: "pulse 1s infinite" }} />
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 10, border: "1px solid #ef4444", cursor: "pointer", fontSize: 13, fontWeight: 600, background: "#1e293b", color: "#ef4444" }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444", display: "inline-block", animation: "pulse 1s infinite" }} />
                         Gravando... (clique para parar)
                       </button>
                     )}
-                    {transcribing && <span style={{ fontSize: 12, color: "#64748b" }}>Transcrevendo áudio com IA...</span>}
                   </div>
-                  <p style={{ fontSize: 11, color: "#475569", marginTop: 8 }}>💡 Grave um áudio descrevendo problemas ou observações — a IA transcreve automaticamente</p>
+                  <p style={{ fontSize: 11, color: "#475569", marginTop: 8 }}>💡 Fale em português — o texto aparece automaticamente no campo acima</p>
                 </div>
 
                 {/* Botão salvar */}
