@@ -350,48 +350,42 @@ export default function App() {
     <div style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#0a0f1a", minHeight: "100vh", color: "#e2e8f0" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* Header */}
-      <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🚛</div>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 17, color: "#f1f5f9" }}>Supremo Açaí</div>
-              <div style={{ fontSize: 10, color: "#475569", letterSpacing: "0.08em" }}>GESTÃO DE FROTA</div>
-            </div>
+      {/* Header compacto - só logo + menu */}
+      <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "11px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>🚛</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí</div>
+            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.06em" }}>GESTÃO DE FROTA</div>
           </div>
-          <div style={{ width: 1, height: 32, background: "#1e293b", margin: "0 4px" }} />
-          <div ref={logisticaRef} style={{ position: "relative" }}>
-            <button onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8" }}>
-              🚚 Logística <span style={{ fontSize: 9, opacity: 0.6 }}>{logisticaOpen ? "▲" : "▼"}</span>
-            </button>
-            {logisticaOpen && (
-              <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: 6, zIndex: 200, minWidth: 200, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}>
-                {navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
-                {navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
-                {navBtn("✅ Checklist", tab === "checklist", () => { setTab("checklist"); setLogisticaOpen(false); })}
-                <div>
-                  <button onClick={() => setCadastroOpen(!cadastroOpen)}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
-                    <span>📋 Cadastros</span>
-                    <span style={{ fontSize: 9, opacity: 0.6 }}>{cadastroOpen ? "▲" : "▼"}</span>
-                  </button>
-                  {cadastroOpen && (
-                    <div style={{ paddingLeft: 12, marginTop: 2 }}>
-                      {navBtn("👤 Motoristas", tab === "motoristas", () => { setTab("motoristas"); setLogisticaOpen(false); setCadastroOpen(false); })}
-                      {navBtn("🚗 Veículos", tab === "veiculos", () => { setTab("veiculos"); setLogisticaOpen(false); setCadastroOpen(false); })}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          <button onClick={() => setTab("ia")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "ia" ? "rgba(6,182,212,0.15)" : "transparent", color: tab === "ia" ? "#06b6d4" : "#94a3b8" }}>
-            🤖 IA
-          </button>
         </div>
-        <button onClick={runAI} style={{ background: "linear-gradient(135deg,#06b6d4,#3b82f6)", border: "none", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>✨ Analisar com IA</button>
+        <div style={{ width: 1, height: 26, background: "#1e293b", flexShrink: 0 }} />
+        <div ref={logisticaRef} style={{ position: "relative" }}>
+          <button onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
+            style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8", whiteSpace: "nowrap" }}>
+            🚚 Logística <span style={{ fontSize: 9, opacity: 0.6 }}>{logisticaOpen ? "▲" : "▼"}</span>
+          </button>
+          {logisticaOpen && (
+            <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: 6, zIndex: 200, minWidth: 200, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}>
+              {navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
+              {navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
+              {navBtn("✅ Checklist", tab === "checklist", () => { setTab("checklist"); setLogisticaOpen(false); })}
+              <div>
+                <button onClick={() => setCadastroOpen(!cadastroOpen)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
+                  <span>📋 Cadastros</span>
+                  <span style={{ fontSize: 9, opacity: 0.6 }}>{cadastroOpen ? "▲" : "▼"}</span>
+                </button>
+                {cadastroOpen && (
+                  <div style={{ paddingLeft: 12, marginTop: 2 }}>
+                    {navBtn("👤 Motoristas", tab === "motoristas", () => { setTab("motoristas"); setLogisticaOpen(false); setCadastroOpen(false); })}
+                    {navBtn("🚗 Veículos", tab === "veiculos", () => { setTab("veiculos"); setLogisticaOpen(false); setCadastroOpen(false); })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && <div style={{ background: "#450a0a", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "10px 24px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>{error} <span style={{ cursor: "pointer" }} onClick={() => setError("")}>✕</span></div>}
@@ -848,6 +842,19 @@ export default function App() {
           </div>
         )}
       </div>
+      {/* Rodapé fixo com IA */}
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#0f172a", borderTop: "1px solid #1e293b", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, zIndex: 100 }}>
+        <button onClick={() => setTab("ia")}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: tab === "ia" ? "1px solid #06b6d4" : "1px solid #334155", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "ia" ? "rgba(6,182,212,0.15)" : "#1e293b", color: tab === "ia" ? "#06b6d4" : "#94a3b8", flexShrink: 0 }}>
+          🤖 IA
+        </button>
+        <button onClick={runAI} disabled={aiLoading}
+          style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", color: "#fff", opacity: aiLoading ? 0.7 : 1 }}>
+          ✨ {aiLoading ? "Analisando..." : "Analisar Frota com IA"}
+        </button>
+      </div>
+      {/* Espaço para o rodapé não cobrir conteúdo */}
+      <div style={{ height: 70 }} />
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
     </div>
   );
