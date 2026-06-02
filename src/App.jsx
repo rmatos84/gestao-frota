@@ -64,6 +64,7 @@ const ITENS_MOTO = [
   { id: "retrovisor", label: "Retrovisor(es) em ordem" },
   { id: "capacete", label: "Capacete disponível" },
   { id: "maquineta", label: "Maquineta com Carregador" },
+  { id: "epi", label: "🦺 EPI Completo (Luva, joelheira, colete refletivo, calçado fechado)" },
 ];
 
 const emptyMotorista = { nome: "", cnh: "", telefone: "" };
@@ -112,6 +113,26 @@ export default function App() {
   const [filtroVeiculo, setFiltroVeiculo] = useState("");
   const [filtroMotorista, setFiltroMotorista] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
+
+  // Abastecimentos - filtros, ordenação e paginação
+  const [abastFiltroMotorista, setAbastFiltroMotorista] = useState("");
+  const [abastFiltroVeiculo, setAbastFiltroVeiculo] = useState("");
+  const [abastFiltroDataIni, setAbastFiltroDataIni] = useState("");
+  const [abastFiltroDataFim, setAbastFiltroDataFim] = useState("");
+  const [abastFiltroTipo, setAbastFiltroTipo] = useState("");
+  const [abastSort, setAbastSort] = useState({ col: "data", dir: "desc" });
+  const [abastPage, setAbastPage] = useState(0);
+  const ABAST_PER_PAGE = 50;
+
+  // Abastecimentos - filtros, ordenação e paginação
+  const [abastFiltroMotorista, setAbastFiltroMotorista] = useState("");
+  const [abastFiltroVeiculo, setAbastFiltroVeiculo] = useState("");
+  const [abastFiltroDataIni, setAbastFiltroDataIni] = useState("");
+  const [abastFiltroDataFim, setAbastFiltroDataFim] = useState("");
+  const [abastFiltroTipo, setAbastFiltroTipo] = useState("");
+  const [abastSort, setAbastSort] = useState({ col: "data", dir: "desc" });
+  const [abastPage, setAbastPage] = useState(0);
+  const ABAST_PER_PAGE = 50;
 
   const loadAll = async () => {
     setLoading(true);
@@ -312,8 +333,17 @@ export default function App() {
     setAiLoading(false);
   };
 
-  const inp = (val, onChange, placeholder, type = "text") => (
-    <input type={type} value={val} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+  const inp = (val, onChange, placeholder, type = "text", intOnly = false) => (
+    <input
+      type={type}
+      value={val}
+      onChange={e => {
+        let v = e.target.value;
+        if (intOnly) v = v.replace(/[^0-9]/g, "");
+        onChange(v);
+      }}
+      onKeyDown={intOnly ? (e => { if ([".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault(); }) : undefined}
+      placeholder={placeholder}
       style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
   );
 
@@ -444,7 +474,7 @@ export default function App() {
                     </div>
                     <div>
                       <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>KM do Veículo {ckKm && <span style={{ color: "#475569", fontWeight: 400 }}>(pré-setado)</span>}</label>
-                      {inp(ckKm, setCkKm, "Ex: 42500", "number")}
+                      {inp(ckKm, setCkKm, "Ex: 42500", "number", true)}
                     </div>
                   </div>
                 </div>
@@ -687,58 +717,173 @@ export default function App() {
         )}
 
         {/* ABASTECIMENTOS */}
-        {!loading && tab === "registros" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
-              <button onClick={() => setShowAbastForm(!showAbastForm)} style={{ background:showAbastForm?"#1e293b":"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showAbastForm?"✕ Cancelar":"+ Novo Abastecimento"}</button>
-            </div>
-            {showAbastForm && (
-              <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20, marginBottom:16 }}>
-                <div style={{ fontWeight:600, marginBottom:14, color:"#f1f5f9" }}>Novo Registro</div>
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
-                  <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>MOTORISTA</label>
-                    <select value={formAbast.motorista_id} onChange={e => setFormAbast(p => ({...p,motorista_id:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
-                      <option value="">Selecione...</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
-                    </select>
-                  </div>
-                  <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>VEÍCULO</label>
-                    <select value={formAbast.veiculo_id} onChange={e => setFormAbast(p => ({...p,veiculo_id:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
-                      <option value="">Selecione...</option>{veiculos.map(v => <option key={v.id} value={v.id}>{TIPO_ICON[v.tipo]||""} {v.modelo} - {v.placa}</option>)}
-                    </select>
-                  </div>
-                  {[["data","DATA","date"],["km_inicial","KM INICIAL","number"],["km_final","KM FINAL","number"],["combustivel_litros","LITROS","number"],["valor_total","VALOR TOTAL (R$)","number"],["observacao","OBSERVAÇÃO","text"]].map(([f,l,t]) => (
-                    <div key={f}><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>{l}</label>{inp(formAbast[f], v => setFormAbast(p => ({...p,[f]:v})), l, t)}</div>
-                  ))}
-                </div>
-                <button onClick={saveAbast} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", opacity:saving?0.6:1 }}>{saving?"Salvando...":"Salvar"}</button>
-              </div>
-            )}
-            {abastecimentos.length === 0 ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro ainda.</div>
-              : <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflowX:"auto" }}>
-                <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
-                  <thead><tr style={{ background:"#0a0f1a" }}>{["Data","Motorista","Veículo","KM Ini","KM Fim","KM Rod","Litros","km/L","Preço/L","Valor Total"].map(h => <th key={h} style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
-                  <tbody>{abastecimentos.map((r,i) => {
-                    const km = r.km_final - r.km_inicial; const litros = parseFloat(r.combustivel_litros);
-                    const kml = (km/litros).toFixed(2); const kmlN = parseFloat(kml);
-                    const precoLitro = r.valor_total ? (parseFloat(r.valor_total)/litros).toFixed(2) : null;
-                    return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
-                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
-                      <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{r.motorista_nome}</td>
-                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
-                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
-                      <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
-                      <td style={{ padding:"10px 14px", fontWeight:600, color:"#06b6d4" }}>{km.toLocaleString()}</td>
-                      <td style={{ padding:"10px 14px", color:"#fbbf24" }}>{litros}L</td>
-                      <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:kmlN>=11?"rgba(16,185,129,0.15)":kmlN>=9?"rgba(251,191,36,0.15)":"rgba(248,113,113,0.15)", color:kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171" }}>{kml}</span></td>
-                      <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro?"R$ "+precoLitro:"—"}</td>
-                      <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
-                    </tr>;
-                  })}</tbody>
-                </table>
-              </div>
+        {!loading && tab === "registros" && (() => {
+          // Filtrar
+          const abastVisiveis = abastecimentos.filter(r => {
+            if (abastFiltroMotorista && r.motorista_id !== abastFiltroMotorista) return false;
+            if (abastFiltroVeiculo && r.veiculo_id !== abastFiltroVeiculo) return false;
+            if (abastFiltroDataIni && r.data < abastFiltroDataIni) return false;
+            if (abastFiltroDataFim && r.data > abastFiltroDataFim) return false;
+            if (abastFiltroTipo) {
+              const vei = veiculos.find(v => v.id === r.veiculo_id);
+              if (!vei || vei.tipo !== abastFiltroTipo) return false;
             }
-          </div>
-        )}
+            return true;
+          });
+          // Ordenar
+          const sorted = [...abastVisiveis].sort((a, b) => {
+            let va, vb;
+            if (abastSort.col === "data") { va = a.data; vb = b.data; }
+            else if (abastSort.col === "motorista") { va = a.motorista_nome||""; vb = b.motorista_nome||""; }
+            else if (abastSort.col === "veiculo") { va = a.veiculo_descricao||""; vb = b.veiculo_descricao||""; }
+            else if (abastSort.col === "km_rod") { va = a.km_final-a.km_inicial; vb = b.km_final-b.km_inicial; }
+            else if (abastSort.col === "kml") { va = (a.km_final-a.km_inicial)/parseFloat(a.combustivel_litros); vb = (b.km_final-b.km_inicial)/parseFloat(b.combustivel_litros); }
+            else if (abastSort.col === "valor") { va = parseFloat(a.valor_total||0); vb = parseFloat(b.valor_total||0); }
+            else if (abastSort.col === "litros") { va = parseFloat(a.combustivel_litros||0); vb = parseFloat(b.combustivel_litros||0); }
+            else { va = a[abastSort.col]||0; vb = b[abastSort.col]||0; }
+            if (va < vb) return abastSort.dir === "asc" ? -1 : 1;
+            if (va > vb) return abastSort.dir === "asc" ? 1 : -1;
+            return 0;
+          });
+          const totalPages = Math.ceil(sorted.length / ABAST_PER_PAGE);
+          const paginated = sorted.slice(abastPage * ABAST_PER_PAGE, (abastPage + 1) * ABAST_PER_PAGE);
+          const temFiltroAbast = abastFiltroMotorista || abastFiltroVeiculo || abastFiltroDataIni || abastFiltroDataFim || abastFiltroTipo;
+
+          const SortTh = ({ col, label }) => {
+            const active = abastSort.col === col;
+            return (
+              <th onClick={() => { setAbastSort(s => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" })); setAbastPage(0); }}
+                style={{ padding:"10px 14px", textAlign:"left", color: active ? "#06b6d4" : "#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap", cursor:"pointer", userSelect:"none" }}>
+                {label} {active ? (abastSort.dir === "asc" ? "▲" : "▼") : "⇅"}
+              </th>
+            );
+          };
+
+          return (
+            <div>
+              {/* Botão novo + filtros */}
+              <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
+                <button onClick={() => setShowAbastForm(!showAbastForm)} style={{ background:showAbastForm?"#1e293b":"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showAbastForm?"✕ Cancelar":"+ Novo Abastecimento"}</button>
+              </div>
+
+              {showAbastForm && (
+                <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20, marginBottom:16 }}>
+                  <div style={{ fontWeight:600, marginBottom:14, color:"#f1f5f9" }}>Novo Registro</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
+                    <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>MOTORISTA</label>
+                      <select value={formAbast.motorista_id} onChange={e => setFormAbast(p => ({...p,motorista_id:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
+                        <option value="">Selecione...</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                      </select>
+                    </div>
+                    <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>VEÍCULO</label>
+                      <select value={formAbast.veiculo_id} onChange={e => setFormAbast(p => ({...p,veiculo_id:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
+                        <option value="">Selecione...</option>{veiculos.map(v => <option key={v.id} value={v.id}>{TIPO_ICON[v.tipo]||""} {v.modelo} - {v.placa}</option>)}
+                      </select>
+                    </div>
+                    {[["data","DATA","date",false],["km_inicial","KM INICIAL","number",true],["km_final","KM FINAL","number",true],["combustivel_litros","LITROS","number",false],["valor_total","VALOR TOTAL (R$)","number",false],["observacao","OBSERVAÇÃO","text",false]].map(([f,l,t,intOnly]) => (
+                      <div key={f}><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>{l}</label>{inp(formAbast[f], v => setFormAbast(p => ({...p,[f]:v})), l, t, intOnly)}</div>
+                    ))}
+                  </div>
+                  <button onClick={saveAbast} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", opacity:saving?0.6:1 }}>{saving?"Salvando...":"Salvar"}</button>
+                </div>
+              )}
+
+              {/* Filtros da tabela */}
+              <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:14, padding:"14px 16px", marginBottom:14 }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:"#f1f5f9", display:"flex", alignItems:"center", gap:6 }}>
+                    🔍 Filtros
+                    {temFiltroAbast && <span style={{ fontSize:10, background:"rgba(6,182,212,0.2)", color:"#06b6d4", border:"1px solid rgba(6,182,212,0.3)", borderRadius:99, padding:"2px 8px" }}>ativos</span>}
+                  </div>
+                  {temFiltroAbast && <button onClick={() => { setAbastFiltroMotorista(""); setAbastFiltroVeiculo(""); setAbastFiltroDataIni(""); setAbastFiltroDataFim(""); setAbastFiltroTipo(""); setAbastPage(0); }} style={{ fontSize:11, color:"#f87171", background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", borderRadius:8, padding:"4px 10px", cursor:"pointer" }}>✕ Limpar</button>}
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
+                  <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Início</label>{inp(abastFiltroDataIni, v => { setAbastFiltroDataIni(v); setAbastPage(0); }, "", "date")}</div>
+                  <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Fim</label>{inp(abastFiltroDataFim, v => { setAbastFiltroDataFim(v); setAbastPage(0); }, "", "date")}</div>
+                  <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Tipo Veículo</label>
+                    <select value={abastFiltroTipo} onChange={e => { setAbastFiltroTipo(e.target.value); setAbastFiltroVeiculo(""); setAbastPage(0); }} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:abastFiltroTipo?"#f1f5f9":"#64748b", fontSize:13, outline:"none" }}>
+                      <option value="">Todos os tipos</option>{TIPOS.map(t => <option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Veículo</label>
+                    <select value={abastFiltroVeiculo} onChange={e => { setAbastFiltroVeiculo(e.target.value); setAbastPage(0); }} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:abastFiltroVeiculo?"#f1f5f9":"#64748b", fontSize:13, outline:"none" }}>
+                      <option value="">Todos</option>{veiculos.filter(v => !abastFiltroTipo || v.tipo === abastFiltroTipo).map(v => <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Motorista</label>
+                    <select value={abastFiltroMotorista} onChange={e => { setAbastFiltroMotorista(e.target.value); setAbastPage(0); }} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:abastFiltroMotorista?"#f1f5f9":"#64748b", fontSize:13, outline:"none" }}>
+                      <option value="">Todos</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resumo */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10, fontSize:12, color:"#64748b" }}>
+                <span>{sorted.length} registro{sorted.length !== 1 ? "s" : ""} {temFiltroAbast ? "filtrados" : "no total"}</span>
+                {totalPages > 1 && <span>Página {abastPage+1} de {totalPages}</span>}
+              </div>
+
+              {sorted.length === 0
+                ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro encontrado.</div>
+                : <>
+                  <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflowX:"auto" }}>
+                    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                      <thead>
+                        <tr style={{ background:"#0a0f1a" }}>
+                          <SortTh col="data" label="Data" />
+                          <SortTh col="motorista" label="Motorista" />
+                          <SortTh col="veiculo" label="Veículo" />
+                          <th style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>KM Ini</th>
+                          <th style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>KM Fim</th>
+                          <SortTh col="km_rod" label="KM Rod" />
+                          <SortTh col="litros" label="Litros" />
+                          <SortTh col="kml" label="km/L" />
+                          <th style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>Preço/L</th>
+                          <SortTh col="valor" label="Valor Total" />
+                        </tr>
+                      </thead>
+                      <tbody>{paginated.map((r,i) => {
+                        const km = r.km_final - r.km_inicial;
+                        const litros = parseFloat(r.combustivel_litros);
+                        const kml = (km/litros).toFixed(2);
+                        const kmlN = parseFloat(kml);
+                        const precoLitro = r.valor_total ? (parseFloat(r.valor_total)/litros).toFixed(2) : null;
+                        return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
+                          <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{r.motorista_nome}</td>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
+                          <td style={{ padding:"10px 14px", fontWeight:600, color:"#06b6d4" }}>{km.toLocaleString()}</td>
+                          <td style={{ padding:"10px 14px", color:"#fbbf24" }}>{litros}L</td>
+                          <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:kmlN>=11?"rgba(16,185,129,0.15)":kmlN>=9?"rgba(251,191,36,0.15)":"rgba(248,113,113,0.15)", color:kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171" }}>{kml}</span></td>
+                          <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro?"R$ "+precoLitro:"—"}</td>
+                          <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
+                        </tr>;
+                      })}</tbody>
+                    </table>
+                  </div>
+
+                  {/* Paginação */}
+                  {totalPages > 1 && (
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginTop:14 }}>
+                      <button onClick={() => setAbastPage(0)} disabled={abastPage===0} style={{ padding:"6px 10px", borderRadius:8, border:"1px solid #334155", background:"#1e293b", color:abastPage===0?"#334155":"#94a3b8", cursor:abastPage===0?"not-allowed":"pointer", fontSize:13 }}>«</button>
+                      <button onClick={() => setAbastPage(p => Math.max(0,p-1))} disabled={abastPage===0} style={{ padding:"6px 12px", borderRadius:8, border:"1px solid #334155", background:"#1e293b", color:abastPage===0?"#334155":"#94a3b8", cursor:abastPage===0?"not-allowed":"pointer", fontSize:13 }}>‹</button>
+                      {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+                        const page = Math.min(Math.max(abastPage - 2 + i, 0), totalPages - 1);
+                        return <button key={page} onClick={() => setAbastPage(page)}
+                          style={{ padding:"6px 12px", borderRadius:8, border:"1px solid #334155", background:page===abastPage?"linear-gradient(135deg,#06b6d4,#3b82f6)":"#1e293b", color:page===abastPage?"#fff":"#94a3b8", cursor:"pointer", fontSize:13, fontWeight:page===abastPage?700:400 }}>{page+1}</button>;
+                      })}
+                      <button onClick={() => setAbastPage(p => Math.min(totalPages-1,p+1))} disabled={abastPage===totalPages-1} style={{ padding:"6px 12px", borderRadius:8, border:"1px solid #334155", background:"#1e293b", color:abastPage===totalPages-1?"#334155":"#94a3b8", cursor:abastPage===totalPages-1?"not-allowed":"pointer", fontSize:13 }}>›</button>
+                      <button onClick={() => setAbastPage(totalPages-1)} disabled={abastPage===totalPages-1} style={{ padding:"6px 10px", borderRadius:8, border:"1px solid #334155", background:"#1e293b", color:abastPage===totalPages-1?"#334155":"#94a3b8", cursor:abastPage===totalPages-1?"not-allowed":"pointer", fontSize:13 }}>»</button>
+                    </div>
+                  )}
+                </>
+              }
+            </div>
+          );
+        })()}
 
         {/* MOTORISTAS */}
         {!loading && tab === "motoristas" && (
