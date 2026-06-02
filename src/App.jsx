@@ -549,11 +549,10 @@ export default function App() {
                     const total = Object.keys(itens).length;
                     const ok = Object.values(itens).filter(v => v === true).length;
                     const nok = Object.values(itens).filter(v => v === false).length;
-                    const [expanded, setExpanded] = useState ? useState(false) : [false, () => {}];
                     return (
                       <div key={c.id} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
                         <div style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer" }} onClick={() => {
-                          const el = document.getElementById(`ck-detail-${c.id}`);
+                          const el = document.getElementById("ck-detail-" + c.id);
                           if (el) el.style.display = el.style.display === "none" ? "block" : "none";
                         }}>
                           <div style={{ width: 38, height: 38, borderRadius: 10, background: `${TIPO_COLOR[c.tipo_veiculo] || "#334155"}20`, border: `1px solid ${TIPO_COLOR[c.tipo_veiculo] || "#334155"}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>{TIPO_ICON[c.tipo_veiculo] || "🚘"}</div>
@@ -567,7 +566,7 @@ export default function App() {
                             <span style={{ color: "#475569", fontSize: 12 }}>▼</span>
                           </div>
                         </div>
-                        <div id={`ck-detail-${c.id}`} style={{ display: "none", padding: "0 18px 16px", borderTop: "1px solid #1e293b" }}>
+                        <div id={"ck-detail-" + c.id} style={{ display: "none", padding: "0 18px 16px", borderTop: "1px solid #1e293b" }}>
                           {total > 0 && (
                             <div style={{ paddingTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: 6, marginBottom: 12 }}>
                               {Object.entries(itens).map(([id, val]) => {
