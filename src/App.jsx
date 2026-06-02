@@ -124,16 +124,6 @@ export default function App() {
   const [abastPage, setAbastPage] = useState(0);
   const ABAST_PER_PAGE = 50;
 
-  // Abastecimentos - filtros, ordenação e paginação
-  const [abastFiltroMotorista, setAbastFiltroMotorista] = useState("");
-  const [abastFiltroVeiculo, setAbastFiltroVeiculo] = useState("");
-  const [abastFiltroDataIni, setAbastFiltroDataIni] = useState("");
-  const [abastFiltroDataFim, setAbastFiltroDataFim] = useState("");
-  const [abastFiltroTipo, setAbastFiltroTipo] = useState("");
-  const [abastSort, setAbastSort] = useState({ col: "data", dir: "desc" });
-  const [abastPage, setAbastPage] = useState(0);
-  const ABAST_PER_PAGE = 50;
-
   const loadAll = async () => {
     setLoading(true);
     try {
