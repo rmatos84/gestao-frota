@@ -3,6 +3,12 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const SUPABASE_URL = "https://vwjetfypctzoimvvdsjo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_65zvqkMbn2aW3PN9woXtrA_iuy5Fgv7";
+const SUPABASE_SVC = "COLE_SERVICE_ROLE_KEY_AQUI"; // Supabase → Settings → API → service_role
+// Cole aqui o service_role key: Supabase → Settings → API → service_role
+const SUPABASE_SVC = "COLE_SERVICE_ROLE_KEY_AQUI";
+// Para o módulo de configurações funcionar, cole aqui o service_role key:
+// Supabase Dashboard → Settings → API → service_role (secret)
+const SUPABASE_SVC = "sb_secret_2YjzzEXmzeWkCe6TdhCNkA_qTT3DCzm";
 
 // ─── Perfis e Permissões ─────────────────────────────────────
 const PERFIS = {
@@ -116,6 +122,7 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState("");
   const [abaConfig, setAbaConfig] = useState("usuarios"); // "usuarios" | "perfis"
+  const [userSort, setUserSort] = useState({ col: "nome", dir: "asc" });
   const [showNovoUser, setShowNovoUser] = useState(false);
   const [novoEmail, setNovoEmail] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
@@ -134,13 +141,27 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   });
 
   const apiAdmin = async (path, method = "GET", body = null) => {
-    const token = localStorage.getItem("frota_token") || SUPABASE_KEY;
     const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
+      method,
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_SVC}`,
+        "Content-Type": "application/json",
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    return res.json();
+  };
+
+  const apiRest = async (path, method = "GET", body = null) => {
+    const token = localStorage.getItem("frota_token") || SUPABASE_KEY;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
       method,
       headers: {
         "apikey": SUPABASE_KEY,
         "Authorization": `Bearer ${token}`,
         "Content-Type": "application/json",
+        "Prefer": method === "POST" ? "return=representation" : "",
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
@@ -226,7 +247,7 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const labelStyle = { fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" };
 
   return (
-    <div>
+    <div style={{ maxWidth: 1200, margin: "0 auto" }}>
       {/* Header da seção */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#f59e0b,#d97706)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚙️</div>
@@ -303,13 +324,23 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#0a0f1a" }}>
-                    {["Nome","E-mail","Perfil","Criado em","Ações"].map(h => (
-                      <th key={h} style={{ padding: "10px 16px", textAlign: "left", color: "#64748b", fontWeight: 600, fontSize: 10, textTransform: "uppercase" }}>{h}</th>
-                    ))}
+                    {[["nome","Nome"],["email","E-mail"],["perfil","Perfil"],["created_at","Criado em"]].map(([col,label]) => {
+                      const active = userSort.col === col;
+                      return <th key={col} onClick={() => setUserSort(s => ({col, dir: s.col===col && s.dir==="asc"?"desc":"asc"}))}
+                        style={{ padding:"10px 16px", textAlign:"left", color:active?"#f59e0b":"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", cursor:"pointer", userSelect:"none", whiteSpace:"nowrap" }}>
+                        {label} {active?(userSort.dir==="asc"?"▲":"▼"):"⇅"}
+                      </th>;
+                    })}
+                    <th style={{ padding:"10px 16px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase" }}>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {usuarios.map((u, i) => {
+                  {[...usuarios].sort((a,b) => {
+                      const col = userSort.col;
+                      let va = col==="nome"?(a.user_metadata?.nome||a.email||""):col==="email"?a.email||"":col==="perfil"?(a.user_metadata?.perfil||""):a.created_at||"";
+                      let vb = col==="nome"?(b.user_metadata?.nome||b.email||""):col==="email"?b.email||"":col==="perfil"?(b.user_metadata?.perfil||""):b.created_at||"";
+                      return userSort.dir==="asc"?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
+                    }).map((u, i) => {
                     const uPerfil = u.user_metadata?.perfil || "motorista";
                     const uNome = u.user_metadata?.nome || u.email?.split("@")[0] || "—";
                     const isMe = u.email === user.email;
@@ -436,7 +467,7 @@ function LoginScreen({ onLogin }) {
       <div style={{ width: "100%", maxWidth: 400 }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: 32 }}>
-          <div style={{ width: 64, height: 64, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 14px" }}>🚛</div>
+          <div style={{ width: 64, height: 64, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 14px" }}>📋</div>
           <div style={{ fontWeight: 700, fontSize: 22, color: "#f1f5f9" }}>Supremo Açaí</div>
           <div style={{ fontSize: 12, color: "#475569", letterSpacing: "0.08em", marginTop: 2 }}>GESTÃO DE FROTA</div>
         </div>
@@ -508,6 +539,7 @@ export default function App() {
 
   const defaultTab = temAcesso(user?.perfil || "motorista", "dashboard") ? "dashboard" : "checklist";
   const [tab, setTab] = useState(defaultTab);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logisticaOpen, setLogisticaOpen] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(false);
   const [motoristas, setMotoristas] = useState([]);
@@ -556,6 +588,12 @@ export default function App() {
   const [abastFiltroDataFim, setAbastFiltroDataFim] = useState("");
   const [abastFiltroTipo, setAbastFiltroTipo] = useState("");
   const [abastSort, setAbastSort] = useState({ col: "data", dir: "desc" });
+  const [motSort, setMotSort] = useState({ col: "nome", dir: "asc" });
+  const [veiSort, setVeiSort] = useState({ col: "modelo", dir: "asc" });
+  const [ckSort, setCkSort] = useState({ col: "data", dir: "desc" });
+  const [motSort, setMotSort] = useState({ col: "nome", dir: "asc" });
+  const [veiSort, setVeiSort] = useState({ col: "modelo", dir: "asc" });
+  const [ckSort, setCkSort] = useState({ col: "data", dir: "desc" });
   const [abastPage, setAbastPage] = useState(0);
   const ABAST_PER_PAGE = 50;
 
@@ -795,6 +833,14 @@ export default function App() {
     return null;
   };
 
+  const sideNavBtn = (icon, label, active, onClick) => (
+    <button onClick={onClick}
+      style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 13, fontWeight: active ? 600 : 400, background: active ? "linear-gradient(135deg,rgba(6,182,212,0.2),rgba(59,130,246,0.2))" : "transparent", color: active ? "#06b6d4" : "#94a3b8", marginBottom: 2, textAlign: "left", borderLeft: active ? "3px solid #06b6d4" : "3px solid transparent", transition: "all 0.15s" }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      {label}
+    </button>
+  );
+
   const navBtn = (label, active, onClick) => (
     <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, textAlign: "left", background: active ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : "transparent", color: active ? "#fff" : "#94a3b8" }}>
       {label}
@@ -810,71 +856,104 @@ export default function App() {
     <div style={{ fontFamily: "'DM Sans','Segoe UI',sans-serif", background: "#0a0f1a", minHeight: "100vh", color: "#e2e8f0" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* Header compacto - só logo + menu */}
-      <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "11px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div style={{ width: 30, height: 30, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 }}>🚛</div>
+      {/* Sidebar overlay */}
+      {sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300 }} />
+      )}
+
+      {/* Sidebar */}
+      <div style={{ position: "fixed", top: 0, left: sidebarOpen ? 0 : -280, width: 260, height: "100vh", background: "#0f172a", borderRight: "1px solid #1e293b", zIndex: 400, transition: "left 0.25s ease", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+        {/* Sidebar header */}
+        <div style={{ padding: "18px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📋</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí</div>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.06em" }}>GESTÃO DE FROTA</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>Supremo Açaí</div>
+            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.08em" }}>GESTÃO</div>
+          </div>
+          <button onClick={() => setSidebarOpen(false)}
+            style={{ marginLeft: "auto", background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* User info */}
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 34, height: 34, background: "linear-gradient(135deg,#1e293b,#334155)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>👤</div>
+          <div>
+            <div style={{ color: "#f1f5f9", fontSize: 13, fontWeight: 600 }}>{user.nome}</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: PERFIS[perfil]?.color || "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{PERFIS[perfil]?.label || perfil}</div>
           </div>
         </div>
-        <div style={{ width: 1, height: 26, background: "#1e293b", flexShrink: 0 }} />
-        <div ref={logisticaRef} style={{ position: "relative" }}>
-          {acesso("dashboard") || acesso("registros") || acesso("motoristas") || acesso("veiculos") ? (
-            <button onClick={() => { setLogisticaOpen(!logisticaOpen); setCadastroOpen(false); }}
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: logisticaOpen ? "rgba(6,182,212,0.15)" : "transparent", color: logisticaOpen ? "#06b6d4" : "#94a3b8", whiteSpace: "nowrap" }}>
-              🚚 Logística <span style={{ fontSize: 9, opacity: 0.6 }}>{logisticaOpen ? "▲" : "▼"}</span>
-            </button>
-          ) : (
-            <button onClick={() => setTab("checklist")}
-              style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 9, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, background: tab === "checklist" ? "rgba(6,182,212,0.15)" : "transparent", color: tab === "checklist" ? "#06b6d4" : "#94a3b8", whiteSpace: "nowrap" }}>
-              ✅ Checklist
-            </button>
+
+        {/* Nav items */}
+        <div style={{ flex: 1, padding: "12px 10px" }}>
+          {/* Logística */}
+          {(acesso("dashboard") || acesso("registros") || acesso("checklist") || acesso("motoristas") || acesso("veiculos")) && (
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ fontSize: 9, color: "#334155", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, padding: "4px 12px 8px" }}>Logística</div>
+              {acesso("dashboard") && sideNavBtn("📊", "Dashboard", tab === "dashboard", () => { setTab("dashboard"); setSidebarOpen(false); })}
+              {acesso("registros") && sideNavBtn("⛽", "Abastecimentos", tab === "registros", () => { setTab("registros"); setSidebarOpen(false); })}
+              {acesso("checklist") && sideNavBtn("✅", "Checklist", tab === "checklist", () => { setTab("checklist"); setSidebarOpen(false); })}
+            </div>
           )}
-          {logisticaOpen && (
-            <div style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 12, padding: 6, zIndex: 200, minWidth: 200, boxShadow: "0 12px 32px rgba(0,0,0,0.5)" }}>
-              {acesso("dashboard") && navBtn("📊 Dashboard", tab === "dashboard", () => { setTab("dashboard"); setLogisticaOpen(false); })}
-              {acesso("registros") && navBtn("⛽ Abastecimentos", tab === "registros", () => { setTab("registros"); setLogisticaOpen(false); })}
-              {acesso("checklist") && navBtn("✅ Checklist", tab === "checklist", () => { setTab("checklist"); setLogisticaOpen(false); })}
-              {(acesso("motoristas") || acesso("veiculos")) && (
-                <div>
-                  <button onClick={() => setCadastroOpen(!cadastroOpen)}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "9px 14px", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 500, background: (tab === "motoristas" || tab === "veiculos") ? "linear-gradient(135deg,#06b6d4,#3b82f6)" : cadastroOpen ? "rgba(6,182,212,0.1)" : "transparent", color: (tab === "motoristas" || tab === "veiculos") ? "#fff" : "#94a3b8" }}>
-                    <span>📋 Cadastros</span>
-                    <span style={{ fontSize: 9, opacity: 0.6 }}>{cadastroOpen ? "▲" : "▼"}</span>
-                  </button>
-                  {cadastroOpen && (
-                    <div style={{ paddingLeft: 12, marginTop: 2 }}>
-                      {acesso("motoristas") && navBtn("👤 Motoristas", tab === "motoristas", () => { setTab("motoristas"); setLogisticaOpen(false); setCadastroOpen(false); })}
-                      {acesso("veiculos") && navBtn("🚗 Veículos", tab === "veiculos", () => { setTab("veiculos"); setLogisticaOpen(false); setCadastroOpen(false); })}
-                    </div>
-                  )}
-                </div>
-              )}
+          {/* Cadastros */}
+          {(acesso("motoristas") || acesso("veiculos")) && (
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ fontSize: 9, color: "#334155", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, padding: "4px 12px 8px" }}>Cadastros</div>
+              {acesso("motoristas") && sideNavBtn("👤", "Motoristas", tab === "motoristas", () => { setTab("motoristas"); setSidebarOpen(false); })}
+              {acesso("veiculos") && sideNavBtn("🚗", "Veículos", tab === "veiculos", () => { setTab("veiculos"); setSidebarOpen(false); })}
+            </div>
+          )}
+          {/* IA */}
+          {acesso("ia") && (
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ fontSize: 9, color: "#334155", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, padding: "4px 12px 8px" }}>Inteligência</div>
+              {sideNavBtn("🤖", "Análise IA", tab === "ia", () => { setTab("ia"); setSidebarOpen(false); })}
+            </div>
+          )}
+          {/* Admin */}
+          {perfil === "admin" && (
+            <div style={{ marginBottom: 4 }}>
+              <div style={{ fontSize: 9, color: "#334155", textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 700, padding: "4px 12px 8px" }}>Admin</div>
+              {sideNavBtn("⚙️", "Configurações", tab === "configuracoes", () => { setTab("configuracoes"); setSidebarOpen(false); })}
             </div>
           )}
         </div>
 
-        {/* User info + logout */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
-            <div style={{ width: 26, height: 26, background: "linear-gradient(135deg,#1e293b,#334155)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>👤</div>
+        {/* Logout */}
+        <div style={{ padding: "12px 10px", borderTop: "1px solid #1e293b" }}>
+          <button onClick={handleLogout}
+            style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid #334155", background: "transparent", color: "#64748b", fontSize: 13, cursor: "pointer" }}>
+            🚪 Sair do sistema
+          </button>
+        </div>
+      </div>
+
+      {/* Topbar compacta */}
+      <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, position: "sticky", top: 0, zIndex: 200 }}>
+        <button onClick={() => setSidebarOpen(true)}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 20, lineHeight: 1, padding: "2px 4px", flexShrink: 0 }}>
+          ☰
+        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 26, height: 26, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>📋</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí</div>
+            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.06em" }}>GESTÃO</div>
+          </div>
+        </div>
+        {/* Current tab label */}
+        <div style={{ marginLeft: 8, fontSize: 13, color: "#475569" }}>
+          {tab === "dashboard" ? "📊 Dashboard" : tab === "registros" ? "⛽ Abastecimentos" : tab === "checklist" ? "✅ Checklist" : tab === "motoristas" ? "👤 Motoristas" : tab === "veiculos" ? "🚗 Veículos" : tab === "ia" ? "🤖 IA" : tab === "configuracoes" ? "⚙️ Configurações" : ""}
+        </div>
+        {/* User pill */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <div style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 24, height: 24, background: "linear-gradient(135deg,#1e293b,#334155)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12 }}>👤</div>
             <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.2 }}>
-              <span style={{ color: "#94a3b8", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 12 }}>{user.nome}</span>
-              <span style={{ fontSize: 9, fontWeight: 700, color: PERFIS[perfil]?.color || "#64748b", textTransform: "uppercase", letterSpacing: "0.05em" }}>{PERFIS[perfil]?.label || perfil}</span>
+              <span style={{ color: "#94a3b8", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11 }}>{user.nome}</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: PERFIS[perfil]?.color || "#64748b", textTransform: "uppercase" }}>{PERFIS[perfil]?.label || perfil}</span>
             </div>
           </div>
-          {perfil === "admin" && (
-            <button onClick={() => { setTab("configuracoes"); setLogisticaOpen(false); }}
-              style={{ padding: "5px 12px", borderRadius: 8, border: tab === "configuracoes" ? "1px solid #f59e0b" : "1px solid #334155", background: tab === "configuracoes" ? "rgba(245,158,11,0.1)" : "#1e293b", color: tab === "configuracoes" ? "#f59e0b" : "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-              ⚙️
-            </button>
-          )}
-          <button onClick={handleLogout}
-            style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid #334155", background: "#1e293b", color: "#64748b", fontSize: 12, cursor: "pointer", whiteSpace: "nowrap" }}>
-            Sair
-          </button>
         </div>
       </div>
 
@@ -1370,7 +1449,13 @@ export default function App() {
         )}
 
         {/* VEÍCULOS */}
-        {!loading && tab === "veiculos" && acesso("veiculos") && (
+        {!loading && tab === "veiculos" && acesso("veiculos") && (() => {
+          const veiSorted = [...veiculos].sort((a,b) => {
+            let va = a[veiSort.col]||"", vb = b[veiSort.col]||"";
+            if (veiSort.col === "ano") { va = Number(va); vb = Number(vb); return veiSort.dir==="asc"?va-vb:vb-va; }
+            return veiSort.dir==="asc"?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
+          });
+          return (
           <div>
             <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:14 }}>
               <button onClick={() => { setShowVeiculoForm(!showVeiculoForm); setEditingVeiculo(null); }} style={{ background:showVeiculoForm?"#1e293b":"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showVeiculoForm?"✕ Cancelar":"+ Novo Veículo"}</button>
