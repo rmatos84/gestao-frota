@@ -498,6 +498,7 @@ function LoginScreen({ onLogin }) {
         const nome = data.user?.user_metadata?.nome || email.split("@")[0];
         const userData = { email, nome, perfil, token: data.access_token };
         localStorage.setItem("frota_token", data.access_token);
+        if (data.refresh_token) localStorage.setItem("frota_refresh", data.refresh_token);
         localStorage.setItem("frota_user", JSON.stringify(userData));
         onLogin(userData);
       } else {
@@ -579,6 +580,7 @@ export default function App() {
   const handleLogin = (u) => setUser(u);
   const handleLogout = () => {
     localStorage.removeItem("frota_token");
+    localStorage.removeItem("frota_refresh");
     localStorage.removeItem("frota_user");
     setUser(null);
   };
@@ -640,6 +642,26 @@ export default function App() {
   const [abastPage, setAbastPage] = useState(0);
   const ABAST_PER_PAGE = 50;
 
+  const refreshToken = async () => {
+    try {
+      const stored = localStorage.getItem("frota_user");
+      if (!stored) return false;
+      const u = JSON.parse(stored);
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: "POST",
+        headers: { "apikey": SUPABASE_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: localStorage.getItem("frota_refresh") || "" }),
+      });
+      const data = await res.json();
+      if (data.access_token) {
+        localStorage.setItem("frota_token", data.access_token);
+        if (data.refresh_token) localStorage.setItem("frota_refresh", data.refresh_token);
+        return true;
+      }
+    } catch {}
+    return false;
+  };
+
   const loadAll = async () => {
     setLoading(true);
     try {
@@ -649,6 +671,12 @@ export default function App() {
         api("abastecimentos?select=*&order=data.desc"),
         api("checklists?select=*&order=created_at.desc"),
       ]);
+      // JWT expirado — tenta renovar automaticamente
+      if (m?.code === "PGRST3O3" || m?.message?.includes("JWT") || m?.code === "PGRST301") {
+        const ok = await refreshToken();
+        if (ok) { await loadAll(); return; }
+        else { handleLogout(); return; }
+      }
       setMotoristas(Array.isArray(m) ? m : []); 
       setVeiculos(Array.isArray(v) ? v : []); 
       setAbastecimentos(Array.isArray(a) ? a : []); 
