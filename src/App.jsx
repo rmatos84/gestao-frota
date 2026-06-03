@@ -3,6 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const SUPABASE_URL = "https://vwjetfypctzoimvvdsjo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_65zvqkMbn2aW3PN9woXtrA_iuy5Fgv7";
+const SUPABASE_SVC = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3amV0ZnlwY3R6b2ltdnZkc2pvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTMwOTg1NSwiZXhwIjoyMDk0ODg1ODU1fQ.fhJ1U_SvAE1lVN6U2gtTICn0XDlSaKjCaBlrzOF9YoQ";
 
 
 // ─── Perfis e Permissões ─────────────────────────────────────
@@ -118,8 +119,6 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const [sucesso, setSucesso] = useState("");
   const [abaConfig, setAbaConfig] = useState("usuarios"); // "usuarios" | "perfis"
   const [userSort, setUserSort] = useState({ col: "nome", dir: "asc" });
-  const [svcKey, setSvcKey] = useState(() => localStorage.getItem("frota_svc") || "");
-  const [showSvcInput, setShowSvcInput] = useState(false);
   const [showNovoUser, setShowNovoUser] = useState(false);
   const [novoEmail, setNovoEmail] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
@@ -138,7 +137,7 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   });
 
   const apiAdmin = async (path, method = "GET", body = null) => {
-    const key = svcKey || SUPABASE_KEY;
+    const key = SUPABASE_SVC;
     const res = await fetch(`${SUPABASE_URL}/auth/v1/${path}`, {
       method,
       headers: {
@@ -272,30 +271,6 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
       {/* ABA USUÁRIOS */}
       {abaConfig === "usuarios" && (
         <div>
-          {/* Service Role Key config */}
-          {!svcKey ? (
-            <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: 13, color: "#fbbf24", fontWeight: 600, marginBottom: 4 }}>⚠️ Configure a chave de admin</div>
-                <div style={{ fontSize: 11, color: "#64748b" }}>Para listar e criar usuários, informe o <b>service_role key</b> do Supabase (Settings → API)</div>
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <input type="password" value={svcKey} onChange={e => setSvcKey(e.target.value)} placeholder="service_role key..."
-                  style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 12, outline: "none", width: 240 }} />
-                <button onClick={() => { localStorage.setItem("frota_svc", svcKey); carregarUsuarios(); }}
-                  style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
-                  Salvar e carregar
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-              <span style={{ fontSize: 11, color: "#10b981" }}>✓ Chave admin configurada</span>
-              <button onClick={() => { setSvcKey(""); localStorage.removeItem("frota_svc"); }}
-                style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>remover</button>
-            </div>
-          )}
-
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
             <button onClick={() => { setShowNovoUser(!showNovoUser); setErro(""); }}
               style={{ background: showNovoUser ? "#1e293b" : "linear-gradient(135deg,#f59e0b,#d97706)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -973,9 +948,15 @@ export default function App() {
 
       {/* Topbar */}
       <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "10px 16px", display: "flex", alignItems: "center", position: "sticky", top: 0, zIndex: 200 }}>
-        {/* Tab atual */}
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#94a3b8" }}>
-          {tab === "dashboard" ? "📊 Dashboard" : tab === "registros" ? "⛽ Abastecimentos" : tab === "checklist" ? "✅ Checklist" : tab === "motoristas" ? "👤 Motoristas" : tab === "veiculos" ? "🚗 Veículos" : tab === "ia" ? "🤖 IA" : tab === "configuracoes" ? "⚙️ Configurações" : ""}
+        {/* Logo + Nome */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📋</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí 360°</div>
+            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.05em" }}>
+              {tab === "dashboard" ? "Dashboard" : tab === "registros" ? "Abastecimentos" : tab === "checklist" ? "Checklist" : tab === "motoristas" ? "Motoristas" : tab === "veiculos" ? "Veículos" : tab === "configuracoes" ? "Configurações" : ""}
+            </div>
+          </div>
         </div>
         {/* Hamburger no lado direito */}
         <button onClick={() => setSidebarOpen(true)}
