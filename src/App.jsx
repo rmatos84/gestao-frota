@@ -120,7 +120,6 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const [userSort, setUserSort] = useState({ col: "nome", dir: "asc" });
   const [svcKey, setSvcKey] = useState(() => localStorage.getItem("frota_svc") || "");
   const [showSvcInput, setShowSvcInput] = useState(false);
-  const [showSvcInput, setShowSvcInput] = useState(false);
   const [showNovoUser, setShowNovoUser] = useState(false);
   const [novoEmail, setNovoEmail] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
@@ -297,29 +296,6 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
             </div>
           )}
 
-          {/* Service Role Key */}
-          {!svcKey ? (
-            <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <div style={{ flex: 1, minWidth: 200 }}>
-                <div style={{ fontSize: 13, color: "#fbbf24", fontWeight: 600, marginBottom: 4 }}>⚠️ Configure a chave de admin</div>
-                <div style={{ fontSize: 11, color: "#64748b" }}>Para listar e criar usuários, informe o service_role key do Supabase (Settings → API)</div>
-              </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <input type="password" value={svcKey} onChange={e => setSvcKey(e.target.value)} placeholder="service_role key..."
-                  style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 12, outline: "none", width: 220 }} />
-                <button onClick={() => { localStorage.setItem("frota_svc", svcKey); carregarUsuarios(); }}
-                  style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 8, padding: "8px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                  Salvar e carregar
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontSize: 11, color: "#10b981" }}>✓ Chave admin configurada</span>
-              <button onClick={() => { setSvcKey(""); localStorage.removeItem("frota_svc"); }}
-                style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>remover</button>
-            </div>
-          )}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
             <button onClick={() => { setShowNovoUser(!showNovoUser); setErro(""); }}
               style={{ background: showNovoUser ? "#1e293b" : "linear-gradient(135deg,#f59e0b,#d97706)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -1602,12 +1578,14 @@ export default function App() {
             </>}
           </div>
         )}
-      </div>
 
         {/* CONFIGURAÇÕES */}
         {tab === "configuracoes" && perfil === "admin" && (
-          <ConfiguracoesTab user={user} SUPABASE_URL={SUPABASE_URL} SUPABASE_KEY={SUPABASE_KEY} PERFIS={PERFIS} />
+          <div style={{ padding: "0 16px" }}>
+            <ConfiguracoesTab user={user} SUPABASE_URL={SUPABASE_URL} SUPABASE_KEY={SUPABASE_KEY} PERFIS={PERFIS} />
+          </div>
         )}
+      </div>
 
       <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
     </div>
