@@ -1022,14 +1022,17 @@ function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, o
 // ─── Configurações ───────────────────────────────────────────
 function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const MODULOS = [
-    { id: "dashboard",     label: "📊 Dashboard",        grupo: "Logística" },
-    { id: "registros",     label: "⛽ Abastecimentos",    grupo: "Logística" },
-    { id: "checklist",     label: "✅ Checklist",          grupo: "Logística" },
-    { id: "ocorrencias",   label: "📝 Ocorrências",       grupo: "Operações" },
-    { id: "motoristas",    label: "👤 Motoristas",         grupo: "Cadastros" },
-    { id: "veiculos",      label: "🚗 Veículos",           grupo: "Cadastros" },
-    { id: "ia",            label: "🤖 IA",                 grupo: "IA" },
-    { id: "configuracoes", label: "⚙️ Configurações",     grupo: "Admin" },
+    { id: "dashboard",            label: "📊 Dashboard",          grupo: "Logística" },
+    { id: "registros",            label: "⛽ Abastecimentos",      grupo: "Logística" },
+    { id: "checklist",            label: "✅ Checklist",            grupo: "Logística" },
+    { id: "ocorrencias",          label: "📝 Ocorrências",         grupo: "Operações" },
+    { id: "motoristas",           label: "👤 Motoristas",           grupo: "Cadastros" },
+    { id: "veiculos",             label: "🚗 Veículos",             grupo: "Cadastros" },
+    { id: "dashboard_producao",   label: "🏭 Dashboard Produção",  grupo: "Produção" },
+    { id: "planejamento_producao",label: "📅 Planejamento",        grupo: "Produção" },
+    { id: "cadastro_produtos",    label: "📦 Produtos",            grupo: "Produção" },
+    { id: "ia",                   label: "🤖 IA",                   grupo: "IA" },
+    { id: "configuracoes",        label: "⚙️ Configurações",       grupo: "Admin" },
   ];
 
   const [usuarios, setUsuarios] = useState([]);
@@ -1051,7 +1054,8 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
       return saved ? JSON.parse(saved) : {
         motorista:            ["checklist"],
         supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
-        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias"],
+        supervisor_producao:  ["dashboard_producao", "planejamento_producao", "cadastro_produtos"],
+        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos"],
       };
     } catch { return {}; }
   });
