@@ -18,10 +18,10 @@ const PERMISSOES = {
     modulos: ["checklist"],
   },
   supervisor_logistica: {
-    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos"],
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
   },
   admin: {
-    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia"],
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias"],
   },
 };
 
@@ -362,8 +362,8 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
       const saved = localStorage.getItem("frota_permissoes");
       return saved ? JSON.parse(saved) : {
         motorista:            ["checklist"],
-        supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos"],
-        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes"],
+        supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
+        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias"],
       };
     } catch { return {}; }
   });
