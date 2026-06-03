@@ -22,10 +22,10 @@ const PERMISSOES = {
     modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
   },
   supervisor_producao: {
-    modulos: ["dashboard_producao", "planejamento_producao", "produtos_producao"],
+    modulos: ["dashboard_producao", "planejamento_producao", "cadastro_produtos"],
   },
   admin: {
-    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "produtos_producao"],
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos"],
   },
 };
 
