@@ -100,6 +100,238 @@ const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
 const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "" };
 
 
+
+// ─── Ocorrências ─────────────────────────────────────────────
+const TIPOS_OCORRENCIA = [
+  { id: "erro_conduta",      label: "Erro de conduta",        penalidade: 50,  icone: "⚠️",  desc: "Comportamento inadequado, reclamação de cliente, etc." },
+  { id: "segundo_erro",      label: "2º erro no mês",         penalidade: 100, icone: "🚫",  desc: "Segundo erro registrado no mesmo mês" },
+  { id: "sem_abastecimento", label: "Não abasteceu o veículo",penalidade: 100, icone: "⛽",  desc: "Devolveu o veículo sem abastecer" },
+  { id: "sem_checklist",     label: "Não fez o checklist",    penalidade: 100, icone: "📋",  desc: "Pegou ou devolveu o veículo sem fazer o checklist" },
+  { id: "outro",             label: "Outro",                  penalidade: 0,   icone: "📝",  desc: "Descreva a ocorrência e informe a penalidade manualmente" },
+];
+
+function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, onSave, onDelete }) {
+  const hoje = new Date();
+  const mesAtualIni = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
+  const mesAtualFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split("T")[0];
+
+  const [filtroIni, setFiltroIni] = useState(mesAtualIni);
+  const [filtroFim, setFiltroFim] = useState(mesAtualFim);
+  const [filtroMot, setFiltroMot] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [erro, setErro] = useState("");
+  const [form, setForm] = useState({ motorista_id: "", motorista_nome: "", tipo: "", data: hoje.toISOString().split("T")[0], penalidade: "", descricao: "" });
+
+  const ocFiltradas = ocorrencias.filter(o => {
+    if (filtroIni && o.data < filtroIni) return false;
+    if (filtroFim && o.data > filtroFim) return false;
+    if (filtroMot && o.motorista_id !== filtroMot) return false;
+    return true;
+  }).sort((a, b) => b.data > a.data ? 1 : -1);
+
+  // Impacto na meta por motorista no período filtrado
+  const impactoMeta = {};
+  ocFiltradas.forEach(o => {
+    const nome = o.motorista_nome || o.motorista_id;
+    if (!impactoMeta[nome]) impactoMeta[nome] = { nome, id: o.motorista_id, totalPenalidade: 0, ocorrencias: [] };
+    impactoMeta[nome].totalPenalidade = Math.min(100, impactoMeta[nome].totalPenalidade + (o.penalidade || 0));
+    impactoMeta[nome].ocorrencias.push(o);
+  });
+  const rankingImpacto = Object.values(impactoMeta).sort((a, b) => b.totalPenalidade - a.totalPenalidade);
+
+  const handleTipoChange = (tipoId) => {
+    const tipo = TIPOS_OCORRENCIA.find(t => t.id === tipoId);
+    setForm(p => ({ ...p, tipo: tipoId, penalidade: tipo?.penalidade ?? "" }));
+  };
+
+  const handleSave = async () => {
+    if (!form.motorista_id || !form.tipo || !form.data) { setErro("Preencha motorista, tipo e data."); return; }
+    setSaving(true); setErro("");
+    try {
+      const mot = motoristas.find(m => m.id === form.motorista_id);
+      await onSave({ ...form, motorista_nome: mot?.nome || "", penalidade: parseFloat(form.penalidade) || 0 });
+      setForm({ motorista_id: "", motorista_nome: "", tipo: "", data: hoje.toISOString().split("T")[0], penalidade: "", descricao: "" });
+      setShowForm(false);
+    } catch (e) { setErro("Erro ao salvar: " + e.message); }
+    setSaving(false);
+  };
+
+  const corPenalidade = (p) => p >= 100 ? "#f87171" : p >= 50 ? "#fbbf24" : "#10b981";
+  const inputStyle = { width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "9px 12px", color: "#f1f5f9", fontSize: 13, outline: "none", boxSizing: "border-box" };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#f87171,#ef4444)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📝</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Registro de Ocorrências</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>Penalidades afetam a meta do mês da data do erro</div>
+        </div>
+        <button onClick={() => { setShowForm(!showForm); setErro(""); }}
+          style={{ marginLeft: "auto", background: showForm ? "#1e293b" : "linear-gradient(135deg,#f87171,#ef4444)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          {showForm ? "✕ Cancelar" : "+ Nova Ocorrência"}
+        </button>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 16, padding: 20, marginBottom: 20 }}>
+          <div style={{ fontWeight: 600, color: "#f1f5f9", marginBottom: 16 }}>Nova Ocorrência</div>
+          {erro && <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, color: "#f87171", fontSize: 12 }}>⚠️ {erro}</div>}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Motorista</label>
+              <select value={form.motorista_id} onChange={e => setForm(p => ({...p, motorista_id: e.target.value}))} style={inputStyle}>
+                <option value="">Selecione...</option>
+                {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Data do Erro</label>
+              <input type="date" value={form.data} onChange={e => setForm(p => ({...p, data: e.target.value}))} style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Tipo de Ocorrência</label>
+              <select value={form.tipo} onChange={e => handleTipoChange(e.target.value)} style={inputStyle}>
+                <option value="">Selecione...</option>
+                {TIPOS_OCORRENCIA.map(t => <option key={t.id} value={t.id}>{t.icone} {t.label} {t.penalidade > 0 ? `(−${t.penalidade}%)` : ""}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Penalidade na Meta (%)</label>
+              <input type="number" value={form.penalidade} onChange={e => setForm(p => ({...p, penalidade: e.target.value}))} min="0" max="100" style={inputStyle} placeholder="0–100" />
+            </div>
+          </div>
+          {form.tipo && TIPOS_OCORRENCIA.find(t => t.id === form.tipo)?.desc && (
+            <div style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 12, color: "#818cf8" }}>
+              ℹ️ {TIPOS_OCORRENCIA.find(t => t.id === form.tipo).desc}
+            </div>
+          )}
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Descrição / Detalhes</label>
+            <textarea value={form.descricao} onChange={e => setForm(p => ({...p, descricao: e.target.value}))} placeholder="Descreva o ocorrido..."
+              style={{ ...inputStyle, resize: "vertical", minHeight: 70, fontFamily: "inherit" }} />
+          </div>
+          <button onClick={handleSave} disabled={saving}
+            style={{ background: "linear-gradient(135deg,#f87171,#ef4444)", border: "none", color: "#fff", borderRadius: 10, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Salvando..." : "💾 Registrar Ocorrência"}
+          </button>
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 12 }}>🔍 Filtros</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+          <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Data Início</label>
+            <input type="date" value={filtroIni} onChange={e => setFiltroIni(e.target.value)} style={inputStyle} /></div>
+          <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Data Fim</label>
+            <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} style={inputStyle} /></div>
+          <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Motorista</label>
+            <select value={filtroMot} onChange={e => setFiltroMot(e.target.value)} style={inputStyle}>
+              <option value="">Todos</option>
+              {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+            </select></div>
+        </div>
+      </div>
+
+      {/* Impacto na Meta */}
+      {rankingImpacto.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12 }}>🎯 Impacto na Meta — {filtroIni?.slice(0,7) === filtroFim?.slice(0,7) ? new Date(filtroIni+"T12:00").toLocaleString("pt-BR",{month:"long",year:"numeric"}) : `${filtroIni} a ${filtroFim}`}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 12 }}>
+            {rankingImpacto.map((m, i) => {
+              const metaRestante = Math.max(0, 100 - m.totalPenalidade);
+              const cor = corPenalidade(m.totalPenalidade);
+              return (
+                <div key={i} style={{ background: "#0f172a", border: `1px solid ${cor}30`, borderRadius: 14, padding: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>{m.nome}</div>
+                      <div style={{ fontSize: 11, color: "#475569" }}>{m.ocorrencias.length} ocorrência{m.ocorrencias.length !== 1 ? "s" : ""} no período</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: cor, lineHeight: 1 }}>{metaRestante}%</div>
+                      <div style={{ fontSize: 10, color: "#475569" }}>da meta</div>
+                    </div>
+                  </div>
+                  {/* Barra de meta */}
+                  <div style={{ height: 8, background: "#1e293b", borderRadius: 99, marginBottom: 10, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${metaRestante}%`, background: `linear-gradient(90deg,${cor}88,${cor})`, borderRadius: 99, transition: "width 0.4s" }} />
+                  </div>
+                  {/* Ocorrências do motorista */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {m.ocorrencias.map((oc, j) => {
+                      const tipo = TIPOS_OCORRENCIA.find(t => t.id === oc.tipo);
+                      return (
+                        <div key={j} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "6px 8px", background: "#0a0f1a", borderRadius: 7 }}>
+                          <span>{tipo?.icone || "📝"}</span>
+                          <span style={{ flex: 1, color: "#94a3b8" }}>{tipo?.label || oc.tipo}</span>
+                          <span style={{ color: "#64748b" }}>{oc.data}</span>
+                          {oc.penalidade > 0 && <span style={{ color: "#f87171", fontWeight: 700 }}>−{oc.penalidade}%</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Tabela de ocorrências */}
+      <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12 }}>
+        📋 Registro ({ocFiltradas.length})
+      </div>
+      {ocFiltradas.length === 0
+        ? <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 40, textAlign: "center", color: "#475569" }}>Nenhuma ocorrência no período.</div>
+        : <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#0a0f1a" }}>
+                {["Data","Motorista","Tipo","Penalidade","Descrição",""].map(h => (
+                  <th key={h} style={{ padding: "10px 16px", textAlign: "left", color: "#64748b", fontWeight: 600, fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ocFiltradas.map((oc, i) => {
+                const tipo = TIPOS_OCORRENCIA.find(t => t.id === oc.tipo);
+                return (
+                  <tr key={oc.id} style={{ borderTop: "1px solid #1e293b", background: i % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)" }}>
+                    <td style={{ padding: "12px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{oc.data}</td>
+                    <td style={{ padding: "12px 16px", fontWeight: 600, color: "#f1f5f9" }}>{oc.motorista_nome}</td>
+                    <td style={{ padding: "12px 16px", color: "#e2e8f0" }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        {tipo?.icone || "📝"} {tipo?.label || oc.tipo}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 16px" }}>
+                      {oc.penalidade > 0
+                        ? <span style={{ fontSize: 12, fontWeight: 700, color: corPenalidade(oc.penalidade), background: `${corPenalidade(oc.penalidade)}15`, border: `1px solid ${corPenalidade(oc.penalidade)}30`, borderRadius: 99, padding: "2px 10px" }}>−{oc.penalidade}%</span>
+                        : <span style={{ color: "#475569" }}>—</span>}
+                    </td>
+                    <td style={{ padding: "12px 16px", color: "#64748b", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{oc.descricao || "—"}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <button onClick={() => onDelete(oc.id)}
+                        style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", borderRadius: 7, padding: "4px 10px", fontSize: 12, cursor: "pointer" }}>
+                        🗑
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  );
+}
+
 // ─── Configurações ───────────────────────────────────────────
 function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const MODULOS = [
@@ -582,6 +814,7 @@ export default function App() {
   const [filtroTipo, setFiltroTipo] = useState("");
 
   // Abastecimentos - filtros, ordenação e paginação
+  const [ocorrencias, setOcorrencias] = useState([]);
   const [abastFiltroMotorista, setAbastFiltroMotorista] = useState("");
   const [abastFiltroVeiculo, setAbastFiltroVeiculo] = useState("");
   const [abastFiltroDataIni, setAbastFiltroDataIni] = useState("");
@@ -617,11 +850,12 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [m, v, a, c] = await Promise.all([
+      const [m, v, a, c, oc] = await Promise.all([
         api("motoristas?select=*&order=nome"),
         api("veiculos?select=*&order=modelo"),
         api("abastecimentos?select=*&order=data.desc"),
         api("checklists?select=*&order=created_at.desc"),
+        api("ocorrencias?select=*&order=data.desc"),
       ]);
       // JWT expirado — tenta renovar automaticamente
       if (m?.code === "PGRST3O3" || m?.message?.includes("JWT") || m?.code === "PGRST301") {
@@ -633,6 +867,7 @@ export default function App() {
       setVeiculos(Array.isArray(v) ? v : []); 
       setAbastecimentos(Array.isArray(a) ? a : []); 
       setChecklists(Array.isArray(c) ? c : []);
+      setOcorrencias(Array.isArray(oc) ? oc : []);
     } catch (e) { setError("Erro ao carregar dados: " + e.message); }
     setLoading(false);
   };
@@ -722,6 +957,323 @@ export default function App() {
   const totalGasto = abastFiltrados.reduce((s, r) => s + parseFloat(r.valor_total || 0), 0);
   const mediaKml = totalLitros > 0 ? (totalKm / totalLitros).toFixed(2) : "—";
   const pieData = (stats || []).map(s => ({ name: (s.nome||"").split(" ")[0], value: s.kmTotal, fullName: s.nome }));
+
+
+  // ─── Score por Motorista ─────────────────────────────────────
+  const scoreMotoristas = useMemo(() => {
+    const hoje = new Date();
+    const result = [];
+
+    // Agrupar abastecimentos por motorista+tipo
+    const porMotTipo = {};
+    abastecimentos.forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo || "Sem tipo";
+      const nome = r.motorista_nome || r.motorista_id;
+      const key = nome + "||" + tipo;
+      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, registros: [], motorista_id: r.motorista_id };
+      porMotTipo[key].registros.push(r);
+    });
+
+    // Média de km/L por tipo (benchmark)
+    const mediaTipo = {};
+    Object.values(porMotTipo).forEach(({ tipo, registros }) => {
+      if (!mediaTipo[tipo]) mediaTipo[tipo] = { totalKm: 0, totalL: 0 };
+      registros.forEach(r => {
+        mediaTipo[tipo].totalKm += r.km_final - r.km_inicial;
+        mediaTipo[tipo].totalL += parseFloat(r.combustivel_litros || 0);
+      });
+    });
+    Object.keys(mediaTipo).forEach(t => {
+      mediaTipo[t].kml = mediaTipo[t].totalL > 0 ? mediaTipo[t].totalKm / mediaTipo[t].totalL : 0;
+    });
+
+    Object.values(porMotTipo).forEach(({ nome, tipo, registros, motorista_id }) => {
+      const totalKmMot = registros.reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
+      const totalLMot = registros.reduce((s, r) => s + parseFloat(r.combustivel_litros || 0), 0);
+      const kmlMot = totalLMot > 0 ? totalKmMot / totalLMot : 0;
+      const benchKml = mediaTipo[tipo]?.kml || kmlMot;
+
+      // 1. Score eficiência (40pts) — kml vs média do tipo
+      let scoreEfic = 0;
+      if (benchKml > 0) {
+        const ratio = kmlMot / benchKml;
+        scoreEfic = Math.min(40, Math.round(ratio * 40));
+      }
+
+      // 2. Score regularidade (30pts) — consistência dos km/L entre registros
+      let scoreReg = 30;
+      if (registros.length >= 3) {
+        const kmls = registros.map(r => {
+          const km = r.km_final - r.km_inicial;
+          const l = parseFloat(r.combustivel_litros || 1);
+          return km / l;
+        });
+        const media = kmls.reduce((a, b) => a + b, 0) / kmls.length;
+        const desvio = Math.sqrt(kmls.reduce((s, v) => s + Math.pow(v - media, 2), 0) / kmls.length);
+        const cvPct = media > 0 ? (desvio / media) * 100 : 0;
+        scoreReg = cvPct < 5 ? 30 : cvPct < 10 ? 25 : cvPct < 20 ? 18 : cvPct < 30 ? 10 : 5;
+      }
+
+      // 3. Score checklist (30pts) — % itens OK nos últimos 5 checklists
+      let scoreCk = 15; // neutro se sem dados
+      const cksMot = checklists
+        .filter(c => c.motorista_id === motorista_id || c.motorista_nome === nome)
+        .slice(0, 5);
+      if (cksMot.length > 0) {
+        let totalItens = 0, totalOk = 0;
+        cksMot.forEach(c => {
+          const itens = c.itens || {};
+          const vals = Object.values(itens);
+          totalItens += vals.length;
+          totalOk += vals.filter(v => v === true).length;
+        });
+        const pctOk = totalItens > 0 ? totalOk / totalItens : 0.5;
+        scoreCk = Math.round(pctOk * 30);
+      }
+
+      const scoreTotal = scoreEfic + scoreReg + scoreCk;
+      const ultimoAbast = registros.sort((a, b) => b.data > a.data ? 1 : -1)[0];
+      const diasSemAbast = ultimoAbast
+        ? Math.floor((hoje - new Date(ultimoAbast.data)) / (1000 * 60 * 60 * 24))
+        : 999;
+
+      result.push({
+        nome, tipo, motorista_id,
+        score: scoreTotal,
+        scoreEfic, scoreReg, scoreCk,
+        kml: kmlMot.toFixed(2),
+        benchKml: benchKml.toFixed(2),
+        viagens: registros.length,
+        diasSemAbast,
+        ultimaData: ultimoAbast?.data || null,
+      });
+    });
+
+    return result.sort((a, b) => b.score - a.score);
+  }, [abastecimentos, veiculos, checklists]);
+
+  // ─── Alertas automáticos ─────────────────────────────────────
+  const alertas = useMemo(() => {
+    const lista = [];
+    const hoje = new Date();
+
+    // Benchmark km/L por tipo
+    const mediaTipo = {};
+    abastecimentos.forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo;
+      if (!tipo) return;
+      if (!mediaTipo[tipo]) mediaTipo[tipo] = { totalKm: 0, totalL: 0 };
+      mediaTipo[tipo].totalKm += r.km_final - r.km_inicial;
+      mediaTipo[tipo].totalL += parseFloat(r.combustivel_litros || 0);
+    });
+    Object.keys(mediaTipo).forEach(t => {
+      mediaTipo[t].kml = mediaTipo[t].totalL > 0 ? mediaTipo[t].totalKm / mediaTipo[t].totalL : 0;
+    });
+
+    // Alerta: veículo sem abastecimento há mais de 7 dias
+    veiculos.filter(v => v.ativo).forEach(v => {
+      const abasts = abastecimentos.filter(a => a.veiculo_id === v.id);
+      if (abasts.length === 0) {
+        lista.push({ tipo: "warning", icone: "⛽", titulo: `${v.modelo} - ${v.placa}`, msg: "Nenhum abastecimento registrado", tag: v.tipo });
+        return;
+      }
+      const ultimo = abasts.sort((a, b) => b.data > a.data ? 1 : -1)[0];
+      const dias = Math.floor((hoje - new Date(ultimo.data)) / (1000 * 60 * 60 * 24));
+      if (dias >= 7) lista.push({ tipo: "warning", icone: "⛽", titulo: `${v.modelo} - ${v.placa}`, msg: `Sem abastecimento há ${dias} dias`, tag: v.tipo });
+    });
+
+    // Alerta: motorista com km/L muito abaixo da média do tipo (< 80%)
+    const porMotTipo = {};
+    abastecimentos.forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo;
+      if (!tipo) return;
+      const nome = r.motorista_nome || r.motorista_id;
+      const key = nome + "||" + tipo;
+      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, km: 0, litros: 0 };
+      porMotTipo[key].km += r.km_final - r.km_inicial;
+      porMotTipo[key].litros += parseFloat(r.combustivel_litros || 0);
+    });
+    Object.values(porMotTipo).forEach(({ nome, tipo, km, litros }) => {
+      const kmlMot = litros > 0 ? km / litros : 0;
+      const bench = mediaTipo[tipo]?.kml || 0;
+      if (bench > 0 && kmlMot < bench * 0.8) {
+        lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `${kmlMot.toFixed(2)} km/L em ${tipo} (média: ${bench.toFixed(2)})`, tag: tipo });
+      }
+    });
+
+    // Alerta: checklist com item reprovado nos últimos 3 dias
+    const tresDias = new Date(hoje); tresDias.setDate(tresDias.getDate() - 3);
+    checklists
+      .filter(c => new Date(c.data) >= tresDias)
+      .forEach(c => {
+        const itens = c.itens || {};
+        const reprovados = Object.entries(itens).filter(([, v]) => v === false);
+        if (reprovados.length > 0) {
+          const labels = reprovados.map(([id]) => {
+            const item = [...(c.tipo_veiculo === "Moto" ? ITENS_MOTO : ITENS_CARRO)].find(x => x.id === id);
+            return item?.label || id;
+          });
+          lista.push({ tipo: "danger", icone: "❌", titulo: `${c.veiculo_descricao}`, msg: `${c.motorista_nome} reprovado: ${labels.slice(0, 2).join(", ")}${labels.length > 2 ? ` +${labels.length - 2}` : ""}`, tag: c.tipo_veiculo });
+        }
+      });
+
+    // Alerta: motorista sem registro há mais de 5 dias (apenas ativo = teve registro recente)
+    const motAtivos = {};
+    abastecimentos.forEach(r => {
+      const nome = r.motorista_nome;
+      if (!motAtivos[nome] || r.data > motAtivos[nome]) motAtivos[nome] = r.data;
+    });
+    Object.entries(motAtivos).forEach(([nome, ultimaData]) => {
+      const dias = Math.floor((hoje - new Date(ultimaData)) / (1000 * 60 * 60 * 24));
+      if (dias >= 5 && dias < 30) {
+        lista.push({ tipo: "info", icone: "👤", titulo: nome, msg: `Sem registro há ${dias} dias`, tag: "Motorista" });
+      }
+    });
+
+    return lista.sort((a, b) => {
+      const order = { danger: 0, warning: 1, info: 2 };
+      return (order[a.tipo] ?? 3) - (order[b.tipo] ?? 3);
+    });
+  }, [abastecimentos, veiculos, checklists]);
+
+
+  // ─── Score por Motorista ─────────────────────────────────────
+  const scoreMotoristas = useMemo(() => {
+    const hoje = new Date();
+    const result = [];
+    const porMotTipo = {};
+    abastecimentos.forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo || "Sem tipo";
+      const nome = r.motorista_nome || r.motorista_id;
+      const key = nome + "||" + tipo;
+      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, registros: [], motorista_id: r.motorista_id };
+      porMotTipo[key].registros.push(r);
+    });
+    const mediaTipo = {};
+    Object.values(porMotTipo).forEach(({ tipo, registros }) => {
+      if (!mediaTipo[tipo]) mediaTipo[tipo] = { totalKm: 0, totalL: 0 };
+      registros.forEach(r => { mediaTipo[tipo].totalKm += r.km_final - r.km_inicial; mediaTipo[tipo].totalL += parseFloat(r.combustivel_litros || 0); });
+    });
+    Object.keys(mediaTipo).forEach(t => { mediaTipo[t].kml = mediaTipo[t].totalL > 0 ? mediaTipo[t].totalKm / mediaTipo[t].totalL : 0; });
+    Object.values(porMotTipo).forEach(({ nome, tipo, registros, motorista_id }) => {
+      const totalKmMot = registros.reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
+      const totalLMot = registros.reduce((s, r) => s + parseFloat(r.combustivel_litros || 0), 0);
+      const kmlMot = totalLMot > 0 ? totalKmMot / totalLMot : 0;
+      const benchKml = mediaTipo[tipo]?.kml || kmlMot || 1;
+      const scoreEfic = Math.min(40, Math.round((kmlMot / benchKml) * 40));
+      let scoreReg = 30;
+      if (registros.length >= 3) {
+        const kmls = registros.map(r => { const km = r.km_final - r.km_inicial; const l = parseFloat(r.combustivel_litros || 1); return km / l; });
+        const media = kmls.reduce((a, b) => a + b, 0) / kmls.length;
+        const desvio = Math.sqrt(kmls.reduce((s, v) => s + Math.pow(v - media, 2), 0) / kmls.length);
+        const cv = media > 0 ? (desvio / media) * 100 : 0;
+        scoreReg = cv < 5 ? 30 : cv < 10 ? 25 : cv < 20 ? 18 : cv < 30 ? 10 : 5;
+      }
+      let scoreCk = 15;
+      const cksMot = checklists.filter(c => c.motorista_id === motorista_id || c.motorista_nome === nome).slice(0, 5);
+      if (cksMot.length > 0) {
+        let tot = 0, ok = 0;
+        cksMot.forEach(c => { const vals = Object.values(c.itens || {}); tot += vals.length; ok += vals.filter(v => v === true).length; });
+        scoreCk = tot > 0 ? Math.round((ok / tot) * 30) : 15;
+      }
+      const ultimoAbast = [...registros].sort((a, b) => b.data > a.data ? 1 : -1)[0];
+      const diasSemAbast = ultimoAbast ? Math.floor((hoje - new Date(ultimoAbast.data)) / 86400000) : 999;
+      result.push({ nome, tipo, motorista_id, score: scoreEfic + scoreReg + scoreCk, scoreEfic, scoreReg, scoreCk, kml: kmlMot.toFixed(2), benchKml: benchKml.toFixed(2), viagens: registros.length, diasSemAbast, ultimaData: ultimoAbast?.data || null });
+    });
+    return result.sort((a, b) => b.score - a.score);
+  }, [abastecimentos, veiculos, checklists]);
+
+  // ─── Alertas automáticos ─────────────────────────────────────
+  const alertas = useMemo(() => {
+    const lista = [];
+
+    // Benchmark km/L por tipo
+    const mediaTipo = {};
+    abastecimentos.forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo; if (!tipo) return;
+      if (!mediaTipo[tipo]) mediaTipo[tipo] = { totalKm: 0, totalL: 0, precos: [] };
+      mediaTipo[tipo].totalKm += r.km_final - r.km_inicial;
+      mediaTipo[tipo].totalL += parseFloat(r.combustivel_litros || 0);
+      if (r.valor_total && r.combustivel_litros) {
+        mediaTipo[tipo].precos.push(parseFloat(r.valor_total) / parseFloat(r.combustivel_litros));
+      }
+    });
+    Object.keys(mediaTipo).forEach(t => {
+      mediaTipo[t].kml = mediaTipo[t].totalL > 0 ? mediaTipo[t].totalKm / mediaTipo[t].totalL : 0;
+      const precos = mediaTipo[t].precos;
+      mediaTipo[t].precoMedio = precos.length > 0 ? precos.reduce((a, b) => a + b, 0) / precos.length : 0;
+    });
+
+    // 1. Alerta: km/L do motorista abaixo de 80% da média do tipo
+    const porMotTipo = {};
+    abastecimentos.forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo; if (!tipo) return;
+      const nome = r.motorista_nome || r.motorista_id;
+      const key = nome + "||" + tipo;
+      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, km: 0, litros: 0 };
+      porMotTipo[key].km += r.km_final - r.km_inicial;
+      porMotTipo[key].litros += parseFloat(r.combustivel_litros || 0);
+    });
+    Object.values(porMotTipo).forEach(({ nome, tipo, km, litros }) => {
+      const kmlMot = litros > 0 ? km / litros : 0;
+      const bench = mediaTipo[tipo]?.kml || 0;
+      if (bench > 0 && kmlMot < bench * 0.8) {
+        const diff = (((kmlMot / bench) - 1) * 100).toFixed(0);
+        lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `${kmlMot.toFixed(2)} km/L em ${tipo} — ${diff}% abaixo da média (${bench.toFixed(2)} km/L)`, tag: tipo });
+      }
+    });
+
+    // 2. Alerta: variação de custo por litro acima de 15% da média histórica
+    Object.entries(mediaTipo).forEach(([tipo, dados]) => {
+      if (dados.precos.length < 3) return;
+      const media = dados.precoMedio;
+      // Últimos 3 abastecimentos desse tipo
+      const ultimos = abastecimentos
+        .filter(r => { const vei = veiculos.find(v => v.id === r.veiculo_id); return vei?.tipo === tipo && r.valor_total && r.combustivel_litros; })
+        .sort((a, b) => b.data > a.data ? 1 : -1)
+        .slice(0, 3);
+      ultimos.forEach(r => {
+        const precoAtual = parseFloat(r.valor_total) / parseFloat(r.combustivel_litros);
+        const variacao = ((precoAtual / media) - 1) * 100;
+        if (variacao > 15) {
+          lista.push({ tipo: "warning", icone: "💰", titulo: `Custo elevado — ${tipo}`, msg: `R$ ${precoAtual.toFixed(2)}/L em ${r.veiculo_descricao?.split(" - ")[0] || ""} (+${variacao.toFixed(0)}% vs média R$ ${media.toFixed(2)}/L)`, tag: tipo });
+        }
+      });
+    });
+
+    // 3. Alerta: item reprovado 3x seguidas no mesmo veículo
+    veiculos.forEach(vei => {
+      const cksVei = checklists
+        .filter(c => c.veiculo_id === vei.id)
+        .sort((a, b) => b.data > a.data ? 1 : -1)
+        .slice(0, 10);
+      if (cksVei.length < 3) return;
+      // Coletar todos os itens que aparecem nos últimos checklists
+      const todosItens = new Set(cksVei.flatMap(c => Object.keys(c.itens || {})));
+      todosItens.forEach(itemId => {
+        let seguidas = 0;
+        for (const ck of cksVei) {
+          const val = (ck.itens || {})[itemId];
+          if (val === false) seguidas++;
+          else if (val === true) break;
+          else continue;
+        }
+        if (seguidas >= 3) {
+          const itensRef = [...ITENS_CARRO, ...ITENS_MOTO];
+          const itemLabel = itensRef.find(x => x.id === itemId)?.label || itemId;
+          lista.push({ tipo: "danger", icone: "🔧", titulo: `${vei.modelo} - ${vei.placa}`, msg: `"${itemLabel}" reprovado ${seguidas}x seguidas`, tag: vei.tipo });
+        }
+      });
+    });
+
+    return lista.sort((a, b) => ({ danger: 0, warning: 1, info: 2 }[a.tipo] ?? 3) - ({ danger: 0, warning: 1, info: 2 }[b.tipo] ?? 3));
+  }, [abastecimentos, veiculos, checklists]);
 
   const saveMotorista = async () => {
     if (!formMotorista.nome) return; setSaving(true);
@@ -938,6 +1490,11 @@ export default function App() {
             {acesso("motoristas") && sideNavBtn("👤", "Motoristas", tab === "motoristas", () => { setTab("motoristas"); setSidebarOpen(false); })}
             {acesso("veiculos") && sideNavBtn("🚗", "Veículos", tab === "veiculos", () => { setTab("veiculos"); setSidebarOpen(false); })}
           </NavGroup>
+          {(acesso("ocorrencias")) && (
+            <NavGroup label="📝 Operações" show={true}>
+              {acesso("ocorrencias") && sideNavBtn("📝", "Ocorrências", tab === "ocorrencias", () => { setTab("ocorrencias"); setSidebarOpen(false); })}
+            </NavGroup>
+          )}
           {perfil === "admin" && (
             <NavGroup label="⚙️ Admin" show={true}>
               {sideNavBtn("⚙️", "Configurações", tab === "configuracoes", () => { setTab("configuracoes"); setSidebarOpen(false); })}
@@ -954,7 +1511,7 @@ export default function App() {
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí 360°</div>
             <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.05em" }}>
-              {tab === "dashboard" ? "Dashboard" : tab === "registros" ? "Abastecimentos" : tab === "checklist" ? "Checklist" : tab === "motoristas" ? "Motoristas" : tab === "veiculos" ? "Veículos" : tab === "configuracoes" ? "Configurações" : ""}
+              {tab === "dashboard" ? "Dashboard" : tab === "registros" ? "Abastecimentos" : tab === "checklist" ? "Checklist" : tab === "motoristas" ? "Motoristas" : tab === "veiculos" ? "Veículos" : tab === "configuracoes" ? "Configurações" : tab === "ocorrencias" ? "Ocorrências" : ""}
             </div>
           </div>
         </div>
@@ -1175,6 +1732,110 @@ export default function App() {
         {/* DASHBOARD */}
         {!loading && tab === "dashboard" && acesso("dashboard") && (
           <div>
+
+            {/* ───── ALERTAS ───── */}
+            {alertas.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  🚨 Alertas
+                  <span style={{ fontSize: 11, background: "rgba(248,113,113,0.2)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 99, padding: "2px 8px", fontWeight: 700 }}>{alertas.length}</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 10 }}>
+                  {alertas.map((a, i) => {
+                    const colors = { danger: { bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)", text: "#f87171", badge: "#1e293b" }, warning: { bg: "rgba(251,191,36,0.08)", border: "rgba(251,191,36,0.25)", text: "#fbbf24", badge: "#1e293b" }, info: { bg: "rgba(99,102,241,0.08)", border: "rgba(99,102,241,0.25)", text: "#818cf8", badge: "#1e293b" } };
+                    const c = colors[a.tipo] || colors.info;
+                    return (
+                      <div key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+                        <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>{a.icone}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.titulo}</div>
+                          <div style={{ fontSize: 12, color: "#94a3b8" }}>{a.msg}</div>
+                        </div>
+                        {a.tag && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.05)", border: "1px solid #334155", borderRadius: 99, padding: "2px 8px", color: "#64748b", whiteSpace: "nowrap", flexShrink: 0 }}>{a.tag}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ───── SCORE DOS MOTORISTAS ───── */}
+            {scoreMotoristas.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12 }}>🏅 Score dos Motoristas</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+                  {scoreMotoristas.map((m, i) => {
+                    const cor = m.score >= 80 ? "#10b981" : m.score >= 60 ? "#fbbf24" : "#f87171";
+                    const tipoCor = TIPO_COLOR[m.tipo] || "#64748b";
+                    const pct = m.score;
+                    return (
+                      <div key={i} style={{ background: "#0f172a", border: `1px solid ${cor}30`, borderRadius: 14, padding: 16, position: "relative", overflow: "hidden" }}>
+                        {/* Faixa colorida lateral */}
+                        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: cor, borderRadius: "14px 0 0 14px" }} />
+                        <div style={{ paddingLeft: 8 }}>
+                          {/* Header */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                                <span style={{ fontSize: 12 }}>{TIPO_ICON[m.tipo] || "🚘"}</span>
+                                <span style={{ fontSize: 11, color: tipoCor, fontWeight: 600 }}>{m.tipo}</span>
+                                <span style={{ fontSize: 10, color: "#475569" }}>· {m.viagens} viagen{m.viagens !== 1 ? "s" : ""}</span>
+                              </div>
+                            </div>
+                            {/* Score circular */}
+                            <div style={{ position: "relative", width: 52, height: 52, flexShrink: 0 }}>
+                              <svg width="52" height="52" style={{ transform: "rotate(-90deg)" }}>
+                                <circle cx="26" cy="26" r="22" fill="none" stroke="#1e293b" strokeWidth="4" />
+                                <circle cx="26" cy="26" r="22" fill="none" stroke={cor} strokeWidth="4"
+                                  strokeDasharray={`${2 * Math.PI * 22}`}
+                                  strokeDashoffset={`${2 * Math.PI * 22 * (1 - pct / 100)}`}
+                                  strokeLinecap="round" />
+                              </svg>
+                              <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                                <span style={{ fontSize: 13, fontWeight: 800, color: cor, lineHeight: 1 }}>{m.score}</span>
+                                <span style={{ fontSize: 8, color: "#475569" }}>pts</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Barra de progresso geral */}
+                          <div style={{ height: 5, background: "#1e293b", borderRadius: 99, marginBottom: 12, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${cor}88, ${cor})`, borderRadius: 99, transition: "width 0.5s ease" }} />
+                          </div>
+
+                          {/* Sub-scores */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+                            {[
+                              { label: "Eficiência", val: m.scoreEfic, max: 40, icon: "⛽" },
+                              { label: "Regularidade", val: m.scoreReg, max: 30, icon: "📊" },
+                              { label: "Checklist", val: m.scoreCk, max: 30, icon: "✅" },
+                            ].map(sub => {
+                              const subPct = (sub.val / sub.max) * 100;
+                              const subCor = subPct >= 80 ? "#10b981" : subPct >= 50 ? "#fbbf24" : "#f87171";
+                              return (
+                                <div key={sub.label} style={{ background: "#0a0f1a", borderRadius: 8, padding: "8px 6px", textAlign: "center" }}>
+                                  <div style={{ fontSize: 14, marginBottom: 2 }}>{sub.icon}</div>
+                                  <div style={{ fontSize: 13, fontWeight: 700, color: subCor }}>{sub.val}<span style={{ fontSize: 9, color: "#475569" }}>/{sub.max}</span></div>
+                                  <div style={{ fontSize: 9, color: "#475569", marginTop: 1 }}>{sub.label}</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* km/L info */}
+                          <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 11, color: "#64748b" }}>
+                            <span>Média: <strong style={{ color: "#e2e8f0" }}>{m.kml} km/L</strong></span>
+                            <span>Benchmark: <strong style={{ color: "#e2e8f0" }}>{m.benchKml} km/L</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: "16px 20px", marginBottom: 20 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", display: "flex", alignItems: "center", gap: 6 }}>
@@ -1540,7 +2201,26 @@ export default function App() {
           </div>
         )}
 
-        {/* CONFIGURAÇÕES */}
+
+        {/* OCORRÊNCIAS */}
+        {!loading && tab === "ocorrencias" && acesso("ocorrencias") && (
+          <OcorrenciasTab
+            motoristas={motoristas}
+            ocorrencias={ocorrencias}
+            abastecimentos={abastecimentos}
+            checklists={checklists}
+            onSave={async (nova) => {
+              await api("ocorrencias", "POST", nova);
+              await loadAll();
+            }}
+            onDelete={async (id) => {
+              await api(`ocorrencias?id=eq.${id}`, "DELETE");
+              await loadAll();
+            }}
+          />
+        )}
+
+        {/* CONFIGURAÇÕES */
         {tab === "configuracoes" && perfil === "admin" && (
           <div style={{ padding: "0 16px" }}>
             <ConfiguracoesTab user={user} SUPABASE_URL={SUPABASE_URL} SUPABASE_KEY={SUPABASE_KEY} PERFIS={PERFIS} />
