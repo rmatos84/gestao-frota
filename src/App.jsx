@@ -335,13 +335,14 @@ function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, o
 // ─── Configurações ───────────────────────────────────────────
 function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const MODULOS = [
-    { id: "dashboard",     label: "📊 Dashboard",       grupo: "Logística" },
-    { id: "registros",     label: "⛽ Abastecimentos",   grupo: "Logística" },
-    { id: "checklist",     label: "✅ Checklist",         grupo: "Logística" },
-    { id: "motoristas",    label: "👤 Motoristas",        grupo: "Cadastros" },
-    { id: "veiculos",      label: "🚗 Veículos",          grupo: "Cadastros" },
-    { id: "ia",            label: "🤖 IA",                grupo: "IA" },
-    { id: "configuracoes", label: "⚙️ Configurações",    grupo: "Admin" },
+    { id: "dashboard",     label: "📊 Dashboard",        grupo: "Logística" },
+    { id: "registros",     label: "⛽ Abastecimentos",    grupo: "Logística" },
+    { id: "checklist",     label: "✅ Checklist",          grupo: "Logística" },
+    { id: "ocorrencias",   label: "📝 Ocorrências",       grupo: "Operações" },
+    { id: "motoristas",    label: "👤 Motoristas",         grupo: "Cadastros" },
+    { id: "veiculos",      label: "🚗 Veículos",           grupo: "Cadastros" },
+    { id: "ia",            label: "🤖 IA",                 grupo: "IA" },
+    { id: "configuracoes", label: "⚙️ Configurações",     grupo: "Admin" },
   ];
 
   const [usuarios, setUsuarios] = useState([]);
