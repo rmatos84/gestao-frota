@@ -1298,8 +1298,6 @@ export default function App() {
         api("ocorrencias?select=*&order=data.desc"),
         api("produtos_producao?select=*&order=nome"),
         api("planejamento_producao?select=*&order=data.desc"),
-        api("produtos_producao?select=*&order=nome"),
-        api("planejamento_producao?select=*&order=data.desc"),
       ]);
       // JWT expirado — tenta renovar automaticamente
       if (m?.code === "PGRST3O3" || m?.message?.includes("JWT") || m?.code === "PGRST301") {
