@@ -10,6 +10,7 @@ const SUPABASE_SVC = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const PERFIS = {
   motorista:            { label: "Motorista",             color: "#06b6d4" },
   supervisor_logistica: { label: "Supervisor Logística",  color: "#8b5cf6" },
+  supervisor_producao:  { label: "Supervisor Produção",   color: "#10b981" },
   admin:                { label: "Admin",                  color: "#f59e0b" },
 };
 
@@ -20,8 +21,11 @@ const PERMISSOES = {
   supervisor_logistica: {
     modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
   },
+  supervisor_producao: {
+    modulos: ["dashboard_producao", "planejamento_producao", "produtos_producao"],
+  },
   admin: {
-    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias"],
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "produtos_producao"],
   },
 };
 
@@ -100,6 +104,690 @@ const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
 const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "" };
 
 
+
+
+// ─── Produção ─────────────────────────────────────────────────
+const CAT_COLORS_PROD = {
+  "Linha Supremo": "#06b6d4", "Linha Ninho": "#f59e0b", "Linha Tuc": "#8b5cf6",
+  "Gelatos": "#ec4899", "Cremes": "#10b981", "Base Milkshake": "#3b82f6",
+  "Potes": "#64748b", "Outros": "#94a3b8",
+};
+
+function DashboardProducaoTab({ planejamentos, produtosProducao }) {
+  const hoje = new Date();
+  const [filtroIni, setFiltroIni] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0]);
+  const [filtroFim, setFiltroFim] = useState(hoje.toISOString().split("T")[0]);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+
+  const categorias = [...new Set(produtosProducao.map(p => p.categoria).filter(Boolean))];
+
+  const filtrados = planejamentos.filter(p => {
+    if (filtroIni && p.data < filtroIni) return false;
+    if (filtroFim && p.data > filtroFim) return false;
+    if (filtroCategoria) {
+      const prod = produtosProducao.find(pp => pp.id === p.produto_id);
+      if (!prod || prod.categoria !== filtroCategoria) return false;
+    }
+    return true;
+  });
+
+  const totalMeta = filtrados.reduce((s, p) => s + (parseFloat(p.litros_meta) || 0), 0);
+  const totalRealizado = filtrados.reduce((s, p) => s + (parseFloat(p.litros_realizado) || 0), 0);
+  const pctGeral = totalMeta > 0 ? ((totalRealizado / totalMeta) * 100).toFixed(1) : 0;
+  const corGeral = parseFloat(pctGeral) >= 95 ? "#10b981" : parseFloat(pctGeral) >= 75 ? "#fbbf24" : "#f87171";
+
+  // Agrupar por produto
+  const porProduto = {};
+  filtrados.forEach(p => {
+    const key = p.produto_nome;
+    if (!porProduto[key]) { const prod = produtosProducao.find(pp => pp.id === p.produto_id); porProduto[key] = { nome: key, categoria: prod?.categoria || "Outros", meta: 0, realizado: 0, dias: 0 }; }
+    porProduto[key].meta += parseFloat(p.litros_meta) || 0;
+    porProduto[key].realizado += parseFloat(p.litros_realizado) || 0;
+    porProduto[key].dias += 1;
+  });
+  const rankProdutos = Object.values(porProduto).sort((a, b) => b.realizado - a.realizado);
+
+  // Agrupar por data (últimos dias)
+  const porData = {};
+  filtrados.forEach(p => {
+    if (!porData[p.data]) porData[p.data] = { meta: 0, realizado: 0 };
+    porData[p.data].meta += parseFloat(p.litros_meta) || 0;
+    porData[p.data].realizado += parseFloat(p.litros_realizado) || 0;
+  });
+  const diasOrdenados = Object.entries(porData).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 10);
+
+  const inpStyle = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#10b981,#059669)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏭</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Dashboard de Produção</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>Acompanhamento de metas e realizações</div>
+        </div>
+      </div>
+
+      {/* Filtros */}
+      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, padding: "14px 16px", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", marginBottom: 10 }}>🔍 Filtros</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 10 }}>
+          <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Data Início</label>
+            <input type="date" value={filtroIni} onChange={e => setFiltroIni(e.target.value)} style={{ ...inpStyle, width: "100%" }} /></div>
+          <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Data Fim</label>
+            <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} style={{ ...inpStyle, width: "100%" }} /></div>
+          <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Categoria</label>
+            <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)} style={{ ...inpStyle, width: "100%" }}>
+              <option value="">Todas</option>
+              {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+            </select></div>
+        </div>
+      </div>
+
+      {/* Cards resumo */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12, marginBottom: 20 }}>
+        {[
+          ["Meta Total", totalMeta.toLocaleString("pt-BR", {maximumFractionDigits:0}) + " L", "#06b6d4", "rgba(6,182,212,0.15)"],
+          ["Realizado", totalRealizado.toLocaleString("pt-BR", {maximumFractionDigits:0}) + " L", corGeral, `${corGeral}25`],
+          ["Atingimento", pctGeral + "%", corGeral, `${corGeral}25`],
+          ["Registros", filtrados.length + " itens", "#8b5cf6", "rgba(139,92,246,0.15)"],
+        ].map(([label, val, color, bg]) => (
+          <div key={label} style={{ background: bg, border: `1px solid ${color}30`, borderRadius: 16, padding: "16px 18px" }}>
+            <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color }}>{val}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Grid: Histórico por dia + Ranking por produto */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+        {/* Histórico por dia */}
+        <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>📅 Por Dia (últimos 10)</div>
+          <div style={{ overflowY: "auto", maxHeight: 360 }}>
+            {diasOrdenados.length === 0
+              ? <div style={{ padding: 24, textAlign: "center", color: "#475569" }}>Sem dados no período.</div>
+              : diasOrdenados.map(([data, d], i) => {
+                  const pct = d.meta > 0 ? Math.min(100, (d.realizado / d.meta) * 100) : 0;
+                  const cor = pct >= 95 ? "#10b981" : pct >= 75 ? "#fbbf24" : "#f87171";
+                  const dataFmt = new Date(data + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+                  return (
+                    <div key={data} style={{ padding: "10px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, color: "#94a3b8", minWidth: 60 }}>{dataFmt}</span>
+                        <div style={{ flex: 1 }}><span style={{ fontSize: 12, color: "#64748b" }}>{d.realizado.toLocaleString("pt-BR", {maximumFractionDigits:0})}L</span><span style={{ fontSize: 11, color: "#334155" }}> / {d.meta.toLocaleString("pt-BR", {maximumFractionDigits:0})}L</span></div>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: cor }}>{pct.toFixed(0)}%</span>
+                      </div>
+                      <div style={{ height: 4, background: "#1e293b", borderRadius: 99 }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: cor, borderRadius: 99 }} />
+                      </div>
+                    </div>
+                  );
+                })
+            }
+          </div>
+        </div>
+
+        {/* Ranking por produto */}
+        <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
+          <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>🏆 Por Produto</div>
+          <div style={{ overflowY: "auto", maxHeight: 360 }}>
+            {rankProdutos.length === 0
+              ? <div style={{ padding: 24, textAlign: "center", color: "#475569" }}>Sem dados no período.</div>
+              : rankProdutos.map((p, i) => {
+                  const pct = p.meta > 0 ? Math.min(100, (p.realizado / p.meta) * 100) : 0;
+                  const cor = pct >= 95 ? "#10b981" : pct >= 75 ? "#fbbf24" : "#f87171";
+                  const catCor = CAT_COLORS_PROD[p.categoria] || "#64748b";
+                  return (
+                    <div key={p.nome} style={{ padding: "10px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                        <div style={{ width: 4, height: 28, borderRadius: 99, background: catCor, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 12, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
+                          <div style={{ fontSize: 10, color: "#475569" }}>{p.realizado.toLocaleString("pt-BR", {maximumFractionDigits:0})}L realizado · {p.dias}d</div>
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: cor, flexShrink: 0 }}>{pct.toFixed(0)}%</span>
+                      </div>
+                      <div style={{ height: 3, background: "#1e293b", borderRadius: 99, marginLeft: 12 }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: cor, borderRadius: 99 }} />
+                      </div>
+                    </div>
+                  );
+                })
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanejamentoProducaoTab({ planejamentos, produtosProducao, onSave, onUpdate, onDelete, canEdit }) {
+  const hoje = new Date().toISOString().split("T")[0];
+  const [filtroData, setFiltroData] = useState(hoje);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ data: hoje, produto_id: "", litros_meta: "", litros_realizado: "", observacao: "" });
+
+  const diasDisponiveis = [...new Set(planejamentos.map(p => p.data))].sort().reverse();
+  const planejamentosDia = planejamentos.filter(p => p.data === filtroData).sort((a, b) => a.produto_nome.localeCompare(b.produto_nome));
+
+  const totalMetaDia = planejamentosDia.reduce((s, p) => s + (parseFloat(p.litros_meta) || 0), 0);
+  const totalRealizadoDia = planejamentosDia.reduce((s, p) => s + (parseFloat(p.litros_realizado) || 0), 0);
+
+  const handleSave = async () => {
+    if (!form.produto_id || !form.data) return;
+    setSaving(true);
+    try {
+      const prod = produtosProducao.find(p => p.id === form.produto_id);
+      const payload = { ...form, produto_nome: prod?.nome || "", litros_meta: parseFloat(form.litros_meta) || 0, litros_realizado: form.litros_realizado !== "" ? parseFloat(form.litros_realizado) : null };
+      if (editId) { await onUpdate(editId, payload); setEditId(null); }
+      else { await onSave(payload); }
+      setForm({ data: filtroData, produto_id: "", litros_meta: "", litros_realizado: "", observacao: "" });
+      setShowForm(false);
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const inpStyle = { width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "9px 12px", color: "#f1f5f9", fontSize: 13, outline: "none", boxSizing: "border-box" };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#10b981,#059669)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📅</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Planejamento de Produção</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>Registre metas e realizações diárias</div>
+        </div>
+        {canEdit && (
+          <button onClick={() => { setShowForm(!showForm); setEditId(null); setForm({ data: filtroData, produto_id: "", litros_meta: "", litros_realizado: "", observacao: "" }); }}
+            style={{ marginLeft: "auto", background: showForm ? "#1e293b" : "linear-gradient(135deg,#10b981,#059669)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            {showForm ? "✕ Cancelar" : "+ Adicionar"}
+          </button>
+        )}
+      </div>
+
+      {/* Form */}
+      {showForm && canEdit && (
+        <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, color: "#f1f5f9", marginBottom: 14 }}>{editId ? "Editar Registro" : "Novo Registro"}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
+            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Data</label>
+              <input type="date" value={form.data} onChange={e => setForm(p => ({...p, data: e.target.value}))} style={inpStyle} /></div>
+            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Produto</label>
+              <select value={form.produto_id} onChange={e => setForm(p => ({...p, produto_id: e.target.value}))} style={inpStyle}>
+                <option value="">Selecione...</option>
+                {[...new Set(produtosProducao.filter(p => p.ativo !== false).map(p => p.categoria))].sort().map(cat => (
+                  <optgroup key={cat} label={cat}>
+                    {produtosProducao.filter(p => p.categoria === cat && p.ativo !== false).map(p => (
+                      <option key={p.id} value={p.id}>{p.nome}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select></div>
+            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Meta (Litros)</label>
+              <input type="number" value={form.litros_meta} onChange={e => setForm(p => ({...p, litros_meta: e.target.value}))} placeholder="0" style={inpStyle} /></div>
+            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Realizado (Litros)</label>
+              <input type="number" value={form.litros_realizado} onChange={e => setForm(p => ({...p, litros_realizado: e.target.value}))} placeholder="—" style={inpStyle} /></div>
+            <div style={{ gridColumn: "1/-1" }}><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Observação</label>
+              <input value={form.observacao} onChange={e => setForm(p => ({...p, observacao: e.target.value}))} placeholder="Observações opcionais..." style={inpStyle} /></div>
+          </div>
+          <button onClick={handleSave} disabled={saving}
+            style={{ marginTop: 14, background: "linear-gradient(135deg,#10b981,#059669)", border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Salvando..." : editId ? "✓ Atualizar" : "💾 Salvar"}
+          </button>
+        </div>
+      )}
+
+      {/* Seletor de data */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ fontSize: 12, color: "#64748b" }}>Data:</label>
+          <input type="date" value={filtroData} onChange={e => setFiltroData(e.target.value)}
+            style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "7px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" }} />
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {diasDisponiveis.slice(0, 7).map(d => (
+            <button key={d} onClick={() => setFiltroData(d)}
+              style={{ padding: "5px 10px", borderRadius: 8, border: `1px solid ${d === filtroData ? "#10b981" : "#334155"}`, background: d === filtroData ? "rgba(16,185,129,0.15)" : "#1e293b", color: d === filtroData ? "#10b981" : "#64748b", fontSize: 11, cursor: "pointer" }}>
+              {new Date(d + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Resumo do dia */}
+      {planejamentosDia.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 10, marginBottom: 14 }}>
+          {[
+            ["Meta do Dia", totalMetaDia.toLocaleString("pt-BR", {maximumFractionDigits:0}) + " L", "#06b6d4"],
+            ["Realizado", totalRealizadoDia.toLocaleString("pt-BR", {maximumFractionDigits:0}) + " L", totalRealizadoDia >= totalMetaDia ? "#10b981" : "#fbbf24"],
+            ["Atingimento", totalMeta => totalMetaDia > 0 ? ((totalRealizadoDia/totalMetaDia)*100).toFixed(1)+"%" : "—", totalRealizadoDia >= totalMetaDia ? "#10b981" : "#fbbf24"],
+            ["Produtos", planejamentosDia.length + " itens", "#8b5cf6"],
+          ].map(([label, val, color]) => (
+            <div key={label} style={{ background: "#0f172a", border: `1px solid ${color}30`, borderRadius: 12, padding: "12px 16px" }}>
+              <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color }}>{typeof val === "function" ? val() : val}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tabela do dia */}
+      {planejamentosDia.length === 0
+        ? <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 40, textAlign: "center", color: "#475569" }}>
+            Nenhum registro para esta data. {canEdit && "Clique em + Adicionar para começar."}
+          </div>
+        : <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "#0a0f1a" }}>
+                  {["Produto","Categoria","Meta (L)","Realizado (L)","% Ating.","Obs",""].map(h => (
+                    <th key={h} style={{ padding: "10px 16px", textAlign: "left", color: "#64748b", fontWeight: 600, fontSize: 10, textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {planejamentosDia.map((p, i) => {
+                  const meta = parseFloat(p.litros_meta) || 0;
+                  const real = parseFloat(p.litros_realizado) || 0;
+                  const pct = meta > 0 && p.litros_realizado !== null ? ((real / meta) * 100) : null;
+                  const cor = pct === null ? "#64748b" : pct >= 95 ? "#10b981" : pct >= 75 ? "#fbbf24" : "#f87171";
+                  const prod = produtosProducao.find(pp => pp.id === p.produto_id);
+                  const catCor = CAT_COLORS_PROD[prod?.categoria] || "#64748b";
+                  return (
+                    <tr key={p.id} style={{ borderTop: "1px solid #1e293b", background: i % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)" }}>
+                      <td style={{ padding: "12px 16px", fontWeight: 600, color: "#f1f5f9" }}>{p.produto_nome}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        {prod?.categoria && <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, background: catCor + "20", color: catCor, border: `1px solid ${catCor}30` }}>{prod.categoria}</span>}
+                      </td>
+                      <td style={{ padding: "12px 16px", color: "#94a3b8" }}>{meta.toLocaleString("pt-BR", {maximumFractionDigits:0})}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        {canEdit && editId !== p.id ? (
+                          <span style={{ color: p.litros_realizado !== null ? "#f1f5f9" : "#475569" }}>
+                            {p.litros_realizado !== null ? real.toLocaleString("pt-BR", {maximumFractionDigits:0}) : "—"}
+                          </span>
+                        ) : p.litros_realizado !== null ? real.toLocaleString("pt-BR", {maximumFractionDigits:0}) : "—"}
+                      </td>
+                      <td style={{ padding: "12px 16px" }}>
+                        {pct !== null ? <span style={{ fontSize: 12, fontWeight: 700, color: cor, background: cor+"15", border: `1px solid ${cor}30`, borderRadius: 99, padding: "2px 8px" }}>{pct.toFixed(1)}%</span> : <span style={{ color: "#475569" }}>—</span>}
+                      </td>
+                      <td style={{ padding: "12px 16px", color: "#64748b", fontSize: 12, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.observacao || "—"}</td>
+                      <td style={{ padding: "12px 16px" }}>
+                        {canEdit && (
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => { setEditId(p.id); setForm({ data: p.data, produto_id: p.produto_id, litros_meta: p.litros_meta || "", litros_realizado: p.litros_realizado ?? "", observacao: p.observacao || "" }); setShowForm(true); }}
+                              style={{ background: "#1e293b", border: "1px solid #334155", color: "#94a3b8", borderRadius: 7, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}>✏️</button>
+                            <button onClick={() => onDelete(p.id)}
+                              style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", borderRadius: 7, padding: "4px 8px", fontSize: 12, cursor: "pointer" }}>🗑</button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+      }
+    </div>
+  );
+}
+
+function CadastroProdutosTab({ produtosProducao, onSave, onUpdate, onDelete }) {
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ nome: "", categoria: "" });
+  const [busca, setBusca] = useState("");
+  const [filtroCat, setFiltroCat] = useState("");
+
+  const categorias = [...new Set(produtosProducao.map(p => p.categoria).filter(Boolean))].sort();
+  const filtrados = produtosProducao.filter(p =>
+    (!busca || p.nome.toLowerCase().includes(busca.toLowerCase())) &&
+    (!filtroCat || p.categoria === filtroCat)
+  ).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  const handleSave = async () => {
+    if (!form.nome) return;
+    setSaving(true);
+    try { await onSave(form); setForm({ nome: "", categoria: "" }); setShowForm(false); }
+    catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
+  const inpStyle = { width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "9px 12px", color: "#f1f5f9", fontSize: 13, outline: "none", boxSizing: "border-box" };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#10b981,#059669)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Cadastro de Produtos</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>{produtosProducao.length} produtos cadastrados</div>
+        </div>
+        <button onClick={() => setShowForm(!showForm)}
+          style={{ marginLeft: "auto", background: showForm ? "#1e293b" : "linear-gradient(135deg,#10b981,#059669)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          {showForm ? "✕ Cancelar" : "+ Novo Produto"}
+        </button>
+      </div>
+
+      {showForm && (
+        <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Nome do Produto</label>
+              <input value={form.nome} onChange={e => setForm(p => ({...p, nome: e.target.value}))} placeholder="Ex: Gelato Morango 5L" style={inpStyle} /></div>
+            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Categoria</label>
+              <input value={form.categoria} onChange={e => setForm(p => ({...p, categoria: e.target.value}))} placeholder="Ex: Gelatos" list="cats-list" style={inpStyle} />
+              <datalist id="cats-list">{categorias.map(c => <option key={c} value={c} />)}</datalist>
+            </div>
+          </div>
+          <button onClick={handleSave} disabled={saving}
+            style={{ marginTop: 14, background: "linear-gradient(135deg,#10b981,#059669)", border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Salvando..." : "💾 Salvar Produto"}
+          </button>
+        </div>
+      )}
+
+      {/* Filtros */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar produto..." style={{ flex: 1, minWidth: 200, background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" }} />
+        <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: filtroCat ? "#f1f5f9" : "#64748b", fontSize: 13, outline: "none" }}>
+          <option value="">Todas as categorias</option>
+          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
+
+      {/* Lista por categoria */}
+      {categorias.filter(c => !filtroCat || c === filtroCat).map(cat => {
+        const prods = filtrados.filter(p => p.categoria === cat);
+        if (prods.length === 0) return null;
+        const catCor = CAT_COLORS_PROD[cat] || "#64748b";
+        return (
+          <div key={cat} style={{ background: "#0f172a", border: `1px solid ${catCor}30`, borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
+            <div style={{ padding: "10px 16px", background: catCor + "10", borderBottom: `1px solid ${catCor}30`, display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: catCor }} />
+              <span style={{ fontWeight: 700, fontSize: 13, color: catCor }}>{cat}</span>
+              <span style={{ fontSize: 11, color: "#475569" }}>{prods.length} produto{prods.length !== 1 ? "s" : ""}</span>
+            </div>
+            {prods.map((p, i) => (
+              <div key={p.id} style={{ padding: "10px 16px", borderTop: i > 0 ? "1px solid #1e293b" : "none", display: "flex", alignItems: "center", gap: 10, opacity: p.ativo === false ? 0.5 : 1 }}>
+                <div style={{ flex: 1, fontWeight: 500, fontSize: 13, color: p.ativo === false ? "#475569" : "#f1f5f9" }}>{p.nome}</div>
+                {p.ativo === false && <span style={{ fontSize: 10, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 99, padding: "1px 7px" }}>Inativo</span>}
+                <button onClick={async () => { await onUpdate(p.id, { ativo: p.ativo === false }); }}
+                  style={{ background: p.ativo === false ? "rgba(16,185,129,0.1)" : "rgba(248,113,113,0.1)", border: p.ativo === false ? "1px solid rgba(16,185,129,0.2)" : "1px solid rgba(248,113,113,0.2)", color: p.ativo === false ? "#10b981" : "#f87171", borderRadius: 7, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>
+                  {p.ativo === false ? "Ativar" : "Desativar"}
+                </button>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+      {filtrados.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#475569" }}>Nenhum produto encontrado.</div>}
+    </div>
+  );
+}
+
+// ─── Produção ─────────────────────────────────────────────────
+const CAT_COLORS_PROD = {
+  "Linha Supremo": "#06b6d4", "Linha Ninho": "#f59e0b", "Linha Tuc": "#8b5cf6",
+  "Gelatos": "#ec4899", "Cremes": "#10b981", "Base Milkshake": "#3b82f6",
+  "Potes": "#64748b", "Outros": "#94a3b8",
+};
+
+
+// ─── Produção ─────────────────────────────────────────────────
+const CAT_COLORS_PROD = {
+  "Linha Supremo": "#06b6d4", "Linha Ninho": "#f59e0b", "Linha Tuc": "#8b5cf6",
+  "Gelatos": "#ec4899", "Cremes": "#10b981", "Base Milkshake": "#3b82f6",
+  "Potes": "#64748b", "Outros": "#94a3b8",
+};
+
+function DashboardProducaoTab({ planejamentos, produtosProducao }) {
+  const hoje = new Date();
+  const [filtroIni, setFiltroIni] = useState(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0]);
+  const [filtroFim, setFiltroFim] = useState(hoje.toISOString().split("T")[0]);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+  const categorias = [...new Set(produtosProducao.map(p => p.categoria).filter(Boolean))];
+  const filtrados = planejamentos.filter(p => {
+    if (filtroIni && p.data < filtroIni) return false;
+    if (filtroFim && p.data > filtroFim) return false;
+    if (filtroCategoria) { const prod = produtosProducao.find(pp => pp.id === p.produto_id); if (!prod || prod.categoria !== filtroCategoria) return false; }
+    return true;
+  });
+  const totalMeta = filtrados.reduce((s, p) => s + (parseFloat(p.litros_meta) || 0), 0);
+  const totalReal = filtrados.reduce((s, p) => s + (parseFloat(p.litros_realizado) || 0), 0);
+  const pct = totalMeta > 0 ? ((totalReal / totalMeta) * 100).toFixed(1) : 0;
+  const cor = parseFloat(pct) >= 95 ? "#10b981" : parseFloat(pct) >= 75 ? "#fbbf24" : "#f87171";
+  const porProduto = {};
+  filtrados.forEach(p => {
+    if (!porProduto[p.produto_nome]) { const prod = produtosProducao.find(pp => pp.id === p.produto_id); porProduto[p.produto_nome] = { nome: p.produto_nome, categoria: prod?.categoria || "", meta: 0, realizado: 0, dias: 0 }; }
+    porProduto[p.produto_nome].meta += parseFloat(p.litros_meta) || 0;
+    porProduto[p.produto_nome].realizado += parseFloat(p.litros_realizado) || 0;
+    porProduto[p.produto_nome].dias += 1;
+  });
+  const rankProd = Object.values(porProduto).sort((a, b) => b.realizado - a.realizado);
+  const porData = {};
+  filtrados.forEach(p => { if (!porData[p.data]) porData[p.data] = { meta: 0, real: 0 }; porData[p.data].meta += parseFloat(p.litros_meta)||0; porData[p.data].real += parseFloat(p.litros_realizado)||0; });
+  const diasOrd = Object.entries(porData).sort((a,b) => b[0].localeCompare(a[0])).slice(0,10);
+  const inpS = { background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" };
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+        <div style={{ width:36, height:36, background:"linear-gradient(135deg,#10b981,#059669)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🏭</div>
+        <div><div style={{ fontWeight:700, fontSize:18, color:"#f1f5f9" }}>Dashboard de Produção</div><div style={{ fontSize:12, color:"#475569" }}>Acompanhamento de metas e realizações</div></div>
+      </div>
+      <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:14, padding:"14px 16px", marginBottom:16 }}>
+        <div style={{ fontSize:13, fontWeight:600, color:"#f1f5f9", marginBottom:10 }}>🔍 Filtros</div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:10 }}>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Início</label><input type="date" value={filtroIni} onChange={e=>setFiltroIni(e.target.value)} style={{ ...inpS, width:"100%" }} /></div>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Fim</label><input type="date" value={filtroFim} onChange={e=>setFiltroFim(e.target.value)} style={{ ...inpS, width:"100%" }} /></div>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Categoria</label><select value={filtroCategoria} onChange={e=>setFiltroCategoria(e.target.value)} style={{ ...inpS, width:"100%" }}><option value="">Todas</option>{categorias.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+        </div>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:20 }}>
+        {[["Meta Total", totalMeta.toLocaleString("pt-BR",{maximumFractionDigits:0})+" L","#06b6d4","rgba(6,182,212,0.15)"],["Realizado",totalReal.toLocaleString("pt-BR",{maximumFractionDigits:0})+" L",cor,cor+"25"],["Atingimento",pct+"%",cor,cor+"25"],["Registros",filtrados.length+" itens","#8b5cf6","rgba(139,92,246,0.15)"]].map(([l,v,c,bg])=>(
+          <div key={l} style={{ background:bg, border:`1px solid ${c}30`, borderRadius:16, padding:"16px 18px" }}>
+            <div style={{ fontSize:10, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>{l}</div>
+            <div style={{ fontSize:22, fontWeight:700, color:c }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+        <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid #1e293b", fontWeight:700, fontSize:14, color:"#f1f5f9" }}>📅 Por Dia (últimos 10)</div>
+          <div style={{ overflowY:"auto", maxHeight:360 }}>
+            {diasOrd.length===0?<div style={{ padding:24, textAlign:"center", color:"#475569" }}>Sem dados.</div>:diasOrd.map(([data,d],i)=>{
+              const p2=d.meta>0?Math.min(100,(d.real/d.meta)*100):0; const c2=p2>=95?"#10b981":p2>=75?"#fbbf24":"#f87171";
+              const df=new Date(data+"T12:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
+              return(<div key={data} style={{ padding:"10px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+                  <span style={{ fontSize:12, color:"#94a3b8", minWidth:60 }}>{df}</span>
+                  <div style={{ flex:1 }}><span style={{ fontSize:12, color:"#64748b" }}>{d.real.toLocaleString("pt-BR",{maximumFractionDigits:0})}L</span><span style={{ fontSize:11, color:"#334155" }}> / {d.meta.toLocaleString("pt-BR",{maximumFractionDigits:0})}L</span></div>
+                  <span style={{ fontWeight:700, fontSize:13, color:c2 }}>{p2.toFixed(0)}%</span>
+                </div>
+                <div style={{ height:4, background:"#1e293b", borderRadius:99 }}><div style={{ height:"100%", width:`${p2}%`, background:c2, borderRadius:99 }} /></div>
+              </div>);
+            })}
+          </div>
+        </div>
+        <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
+          <div style={{ padding:"14px 20px", borderBottom:"1px solid #1e293b", fontWeight:700, fontSize:14, color:"#f1f5f9" }}>🏆 Por Produto</div>
+          <div style={{ overflowY:"auto", maxHeight:360 }}>
+            {rankProd.length===0?<div style={{ padding:24, textAlign:"center", color:"#475569" }}>Sem dados.</div>:rankProd.map((p,i)=>{
+              const p2=p.meta>0?Math.min(100,(p.realizado/p.meta)*100):0; const c2=p2>=95?"#10b981":p2>=75?"#fbbf24":"#f87171";
+              const cc=CAT_COLORS_PROD[p.categoria]||"#64748b";
+              return(<div key={p.nome} style={{ padding:"10px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4 }}>
+                  <div style={{ width:4, height:28, borderRadius:99, background:cc, flexShrink:0 }} />
+                  <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:600, fontSize:12, color:"#f1f5f9", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.nome}</div><div style={{ fontSize:10, color:"#475569" }}>{p.realizado.toLocaleString("pt-BR",{maximumFractionDigits:0})}L · {p.dias}d</div></div>
+                  <span style={{ fontWeight:700, fontSize:13, color:c2, flexShrink:0 }}>{p2.toFixed(0)}%</span>
+                </div>
+                <div style={{ height:3, background:"#1e293b", borderRadius:99, marginLeft:12 }}><div style={{ height:"100%", width:`${p2}%`, background:c2, borderRadius:99 }} /></div>
+              </div>);
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanejamentoProducaoTab({ planejamentos, produtosProducao, onSave, onUpdate, onDelete, canEdit }) {
+  const hoje = new Date().toISOString().split("T")[0];
+  const [filtroData, setFiltroData] = useState(hoje);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({ data: hoje, produto_id: "", litros_meta: "", litros_realizado: "", observacao: "" });
+  const diasDisp = [...new Set(planejamentos.map(p=>p.data))].sort().reverse();
+  const planDia = planejamentos.filter(p=>p.data===filtroData).sort((a,b)=>a.produto_nome.localeCompare(b.produto_nome));
+  const totalM = planDia.reduce((s,p)=>s+(parseFloat(p.litros_meta)||0),0);
+  const totalR = planDia.reduce((s,p)=>s+(parseFloat(p.litros_realizado)||0),0);
+  const handleSave = async () => {
+    if (!form.produto_id||!form.data) return; setSaving(true);
+    try {
+      const prod = produtosProducao.find(p=>p.id===form.produto_id);
+      const payload = { ...form, produto_nome:prod?.nome||"", litros_meta:parseFloat(form.litros_meta)||0, litros_realizado:form.litros_realizado!==""?parseFloat(form.litros_realizado):null };
+      if (editId) { await onUpdate(editId,payload); setEditId(null); } else { await onSave(payload); }
+      setForm({ data:filtroData, produto_id:"", litros_meta:"", litros_realizado:"", observacao:"" }); setShowForm(false);
+    } catch(e){} setSaving(false);
+  };
+  const inpS = { width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"9px 12px", color:"#f1f5f9", fontSize:13, outline:"none", boxSizing:"border-box" };
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+        <div style={{ width:36, height:36, background:"linear-gradient(135deg,#10b981,#059669)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📅</div>
+        <div><div style={{ fontWeight:700, fontSize:18, color:"#f1f5f9" }}>Planejamento de Produção</div><div style={{ fontSize:12, color:"#475569" }}>Registre metas e realizações diárias</div></div>
+        {canEdit&&<button onClick={()=>{setShowForm(!showForm);setEditId(null);setForm({data:filtroData,produto_id:"",litros_meta:"",litros_realizado:"",observacao:""});}} style={{ marginLeft:"auto", background:showForm?"#1e293b":"linear-gradient(135deg,#10b981,#059669)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showForm?"✕ Cancelar":"+ Adicionar"}</button>}
+      </div>
+      {showForm&&canEdit&&(
+        <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20, marginBottom:16 }}>
+          <div style={{ fontWeight:600, color:"#f1f5f9", marginBottom:14 }}>{editId?"Editar Registro":"Novo Registro"}</div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
+            <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data</label><input type="date" value={form.data} onChange={e=>setForm(p=>({...p,data:e.target.value}))} style={inpS} /></div>
+            <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Produto</label>
+              <select value={form.produto_id} onChange={e=>setForm(p=>({...p,produto_id:e.target.value}))} style={inpS}>
+                <option value="">Selecione...</option>
+                {[...new Set(produtosProducao.filter(p=>p.ativo!==false).map(p=>p.categoria))].sort().map(cat=>(
+                  <optgroup key={cat} label={cat}>{produtosProducao.filter(p=>p.categoria===cat&&p.ativo!==false).map(p=><option key={p.id} value={p.id}>{p.nome}</option>)}</optgroup>
+                ))}
+              </select></div>
+            <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Meta (Litros)</label><input type="number" value={form.litros_meta} onChange={e=>setForm(p=>({...p,litros_meta:e.target.value}))} placeholder="0" style={inpS} /></div>
+            <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Realizado (Litros)</label><input type="number" value={form.litros_realizado} onChange={e=>setForm(p=>({...p,litros_realizado:e.target.value}))} placeholder="—" style={inpS} /></div>
+            <div style={{ gridColumn:"1/-1" }}><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Observação</label><input value={form.observacao} onChange={e=>setForm(p=>({...p,observacao:e.target.value}))} placeholder="Opcional..." style={inpS} /></div>
+          </div>
+          <button onClick={handleSave} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#10b981,#059669)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", opacity:saving?0.6:1 }}>{saving?"Salvando...":editId?"✓ Atualizar":"💾 Salvar"}</button>
+        </div>
+      )}
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <label style={{ fontSize:12, color:"#64748b" }}>Data:</label>
+          <input type="date" value={filtroData} onChange={e=>setFiltroData(e.target.value)} style={{ background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"7px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }} />
+        </div>
+        <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+          {diasDisp.slice(0,7).map(d=><button key={d} onClick={()=>setFiltroData(d)} style={{ padding:"5px 10px", borderRadius:8, border:`1px solid ${d===filtroData?"#10b981":"#334155"}`, background:d===filtroData?"rgba(16,185,129,0.15)":"#1e293b", color:d===filtroData?"#10b981":"#64748b", fontSize:11, cursor:"pointer" }}>{new Date(d+"T12:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}</button>)}
+        </div>
+      </div>
+      {planDia.length>0&&(
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:14 }}>
+          {[["Meta",totalM.toLocaleString("pt-BR",{maximumFractionDigits:0})+" L","#06b6d4"],["Realizado",totalR.toLocaleString("pt-BR",{maximumFractionDigits:0})+" L",totalR>=totalM?"#10b981":"#fbbf24"],["Atingimento",totalM>0?((totalR/totalM)*100).toFixed(1)+"%":"—",totalR>=totalM?"#10b981":"#fbbf24"],["Produtos",planDia.length+" itens","#8b5cf6"]].map(([l,v,c])=>(
+            <div key={l} style={{ background:"#0f172a", border:`1px solid ${c}30`, borderRadius:12, padding:"12px 16px" }}>
+              <div style={{ fontSize:10, color:"#64748b", textTransform:"uppercase", marginBottom:4 }}>{l}</div>
+              <div style={{ fontSize:18, fontWeight:700, color:c }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {planDia.length===0
+        ?<div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro para esta data.{canEdit&&" Clique em + Adicionar."}</div>
+        :<div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead><tr style={{ background:"#0a0f1a" }}>{["Produto","Categoria","Meta (L)","Realizado (L)","% Ating.","Obs",""].map(h=><th key={h} style={{ padding:"10px 16px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+            <tbody>{planDia.map((p,i)=>{
+              const meta=parseFloat(p.litros_meta)||0; const real=parseFloat(p.litros_realizado)||0;
+              const pct2=meta>0&&p.litros_realizado!==null?((real/meta)*100):null;
+              const c2=pct2===null?"#64748b":pct2>=95?"#10b981":pct2>=75?"#fbbf24":"#f87171";
+              const prod=produtosProducao.find(pp=>pp.id===p.produto_id);
+              const cc=CAT_COLORS_PROD[prod?.categoria]||"#64748b";
+              return(<tr key={p.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
+                <td style={{ padding:"12px 16px", fontWeight:600, color:"#f1f5f9" }}>{p.produto_nome}</td>
+                <td style={{ padding:"12px 16px" }}>{prod?.categoria&&<span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:cc+"20", color:cc, border:`1px solid ${cc}30` }}>{prod.categoria}</span>}</td>
+                <td style={{ padding:"12px 16px", color:"#94a3b8" }}>{meta.toLocaleString("pt-BR",{maximumFractionDigits:0})}</td>
+                <td style={{ padding:"12px 16px", color:p.litros_realizado!==null?"#f1f5f9":"#475569" }}>{p.litros_realizado!==null?real.toLocaleString("pt-BR",{maximumFractionDigits:0}):"—"}</td>
+                <td style={{ padding:"12px 16px" }}>{pct2!==null?<span style={{ fontSize:12, fontWeight:700, color:c2, background:c2+"15", border:`1px solid ${c2}30`, borderRadius:99, padding:"2px 8px" }}>{pct2.toFixed(1)}%</span>:<span style={{ color:"#475569" }}>—</span>}</td>
+                <td style={{ padding:"12px 16px", color:"#64748b", fontSize:12, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{p.observacao||"—"}</td>
+                <td style={{ padding:"12px 16px" }}>{canEdit&&<div style={{ display:"flex", gap:6 }}>
+                  <button onClick={()=>{setEditId(p.id);setForm({data:p.data,produto_id:p.produto_id,litros_meta:p.litros_meta||"",litros_realizado:p.litros_realizado??""  ,observacao:p.observacao||""});setShowForm(true);}} style={{ background:"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:7, padding:"4px 8px", fontSize:12, cursor:"pointer" }}>✏️</button>
+                  <button onClick={()=>onDelete(p.id)} style={{ background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", color:"#f87171", borderRadius:7, padding:"4px 8px", fontSize:12, cursor:"pointer" }}>🗑</button>
+                </div>}</td>
+              </tr>);
+            })}</tbody>
+          </table>
+        </div>
+      }
+    </div>
+  );
+}
+
+function CadastroProdutosTab({ produtosProducao, onSave, onUpdate }) {
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ nome:"", categoria:"" });
+  const [busca, setBusca] = useState("");
+  const [filtroCat, setFiltroCat] = useState("");
+  const categorias = [...new Set(produtosProducao.map(p=>p.categoria).filter(Boolean))].sort();
+  const filtrados = produtosProducao.filter(p=>(!busca||p.nome.toLowerCase().includes(busca.toLowerCase()))&&(!filtroCat||p.categoria===filtroCat)).sort((a,b)=>a.nome.localeCompare(b.nome));
+  const handleSave = async () => {
+    if (!form.nome) return; setSaving(true);
+    try { await onSave(form); setForm({nome:"",categoria:""}); setShowForm(false); } catch(e){}
+    setSaving(false);
+  };
+  const inpS = { width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"9px 12px", color:"#f1f5f9", fontSize:13, outline:"none", boxSizing:"border-box" };
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+        <div style={{ width:36, height:36, background:"linear-gradient(135deg,#10b981,#059669)", borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>📦</div>
+        <div><div style={{ fontWeight:700, fontSize:18, color:"#f1f5f9" }}>Cadastro de Produtos</div><div style={{ fontSize:12, color:"#475569" }}>{produtosProducao.length} produtos cadastrados</div></div>
+        <button onClick={()=>setShowForm(!showForm)} style={{ marginLeft:"auto", background:showForm?"#1e293b":"linear-gradient(135deg,#10b981,#059669)", border:"1px solid #334155", color:"#fff", borderRadius:10, padding:"8px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>{showForm?"✕ Cancelar":"+ Novo Produto"}</button>
+      </div>
+      {showForm&&(
+        <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20, marginBottom:16 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Nome do Produto</label><input value={form.nome} onChange={e=>setForm(p=>({...p,nome:e.target.value}))} placeholder="Ex: Gelato Morango 5L" style={inpS} /></div>
+            <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Categoria</label><input value={form.categoria} onChange={e=>setForm(p=>({...p,categoria:e.target.value}))} placeholder="Ex: Gelatos" list="cats-list" style={inpS} /><datalist id="cats-list">{categorias.map(c=><option key={c} value={c}/>)}</datalist></div>
+          </div>
+          <button onClick={handleSave} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#10b981,#059669)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", opacity:saving?0.6:1 }}>{saving?"Salvando...":"💾 Salvar"}</button>
+        </div>
+      )}
+      <div style={{ display:"flex", gap:10, marginBottom:14, flexWrap:"wrap" }}>
+        <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="🔍 Buscar produto..." style={{ flex:1, minWidth:200, background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }} />
+        <select value={filtroCat} onChange={e=>setFiltroCat(e.target.value)} style={{ background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:filtroCat?"#f1f5f9":"#64748b", fontSize:13, outline:"none" }}><option value="">Todas categorias</option>{categorias.map(c=><option key={c} value={c}>{c}</option>)}</select>
+      </div>
+      {categorias.filter(c=>!filtroCat||c===filtroCat).map(cat=>{
+        const prods=filtrados.filter(p=>p.categoria===cat); if(prods.length===0) return null;
+        const cc=CAT_COLORS_PROD[cat]||"#64748b";
+        return(<div key={cat} style={{ background:"#0f172a", border:`1px solid ${cc}30`, borderRadius:14, overflow:"hidden", marginBottom:12 }}>
+          <div style={{ padding:"10px 16px", background:cc+"10", borderBottom:`1px solid ${cc}30`, display:"flex", alignItems:"center", gap:8 }}>
+            <div style={{ width:8, height:8, borderRadius:"50%", background:cc }} />
+            <span style={{ fontWeight:700, fontSize:13, color:cc }}>{cat}</span>
+            <span style={{ fontSize:11, color:"#475569" }}>{prods.length} produto{prods.length!==1?"s":""}</span>
+          </div>
+          {prods.map((p,i)=>(
+            <div key={p.id} style={{ padding:"10px 16px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:10, opacity:p.ativo===false?0.5:1 }}>
+              <div style={{ flex:1, fontWeight:500, fontSize:13, color:p.ativo===false?"#475569":"#f1f5f9" }}>{p.nome}</div>
+              {p.ativo===false&&<span style={{ fontSize:10, color:"#f87171", background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", borderRadius:99, padding:"1px 7px" }}>Inativo</span>}
+              <button onClick={async()=>{await onUpdate(p.id,{ativo:p.ativo===false});}} style={{ background:p.ativo===false?"rgba(16,185,129,0.1)":"rgba(248,113,113,0.1)", border:p.ativo===false?"1px solid rgba(16,185,129,0.2)":"1px solid rgba(248,113,113,0.2)", color:p.ativo===false?"#10b981":"#f87171", borderRadius:7, padding:"4px 10px", fontSize:11, cursor:"pointer" }}>{p.ativo===false?"Ativar":"Desativar"}</button>
+            </div>
+          ))}
+        </div>);
+      })}
+      {filtrados.length===0&&<div style={{ padding:40, textAlign:"center", color:"#475569" }}>Nenhum produto encontrado.</div>}
+    </div>
+  );
+}
 
 // ─── Ocorrências ─────────────────────────────────────────────
 const TIPOS_OCORRENCIA = [
@@ -769,7 +1457,12 @@ export default function App() {
     setUser(null);
   };
 
-  const defaultTab = temAcesso(user?.perfil || "motorista", "dashboard") ? "dashboard" : "checklist";
+  const defaultTab = (() => {
+    const p = user?.perfil || "motorista";
+    if (temAcesso(p, "dashboard")) return "dashboard";
+    if (temAcesso(p, "dashboard_producao")) return "dashboard_producao";
+    return "checklist";
+  })();
   const [tab, setTab] = useState(defaultTab);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logisticaOpen, setLogisticaOpen] = useState(false);
@@ -815,6 +1508,8 @@ export default function App() {
 
   // Abastecimentos - filtros, ordenação e paginação
   const [ocorrencias, setOcorrencias] = useState([]);
+  const [produtosProducao, setProdutosProducao] = useState([]);
+  const [planejamentos, setPlanejamentos] = useState([]);
   const [abastFiltroMotorista, setAbastFiltroMotorista] = useState("");
   const [abastFiltroVeiculo, setAbastFiltroVeiculo] = useState("");
   const [abastFiltroDataIni, setAbastFiltroDataIni] = useState("");
@@ -850,12 +1545,16 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [m, v, a, c, oc] = await Promise.all([
+      const [m, v, a, c, oc, pp, pl] = await Promise.all([
         api("motoristas?select=*&order=nome"),
         api("veiculos?select=*&order=modelo"),
         api("abastecimentos?select=*&order=data.desc"),
         api("checklists?select=*&order=created_at.desc"),
         api("ocorrencias?select=*&order=data.desc"),
+        api("produtos_producao?select=*&order=nome"),
+        api("planejamento_producao?select=*&order=data.desc"),
+        api("produtos_producao?select=*&order=nome"),
+        api("planejamento_producao?select=*&order=data.desc"),
       ]);
       // JWT expirado — tenta renovar automaticamente
       if (m?.code === "PGRST3O3" || m?.message?.includes("JWT") || m?.code === "PGRST301") {
@@ -868,6 +1567,12 @@ export default function App() {
       setAbastecimentos(Array.isArray(a) ? a : []); 
       setChecklists(Array.isArray(c) ? c : []);
       setOcorrencias(Array.isArray(oc) ? oc : []);
+      setProdutosProducao(Array.isArray(pp) ? pp : []);
+      setPlanejamentos(Array.isArray(pl) ? pl : []);
+      setProdutosProducao(Array.isArray(pp) ? pp : []);
+      setPlanejamentoProducao(Array.isArray(pl) ? pl : []);
+      setProdutosProducao(Array.isArray(pp) ? pp : []);
+      setPlanejamentoProducao(Array.isArray(pl) ? pl : []);
     } catch (e) { setError("Erro ao carregar dados: " + e.message); }
     setLoading(false);
   };
@@ -1310,6 +2015,34 @@ export default function App() {
             {acesso("motoristas") && sideNavBtn("👤", "Motoristas", tab === "motoristas", () => { setTab("motoristas"); setSidebarOpen(false); })}
             {acesso("veiculos") && sideNavBtn("🚗", "Veículos", tab === "veiculos", () => { setTab("veiculos"); setSidebarOpen(false); })}
           </NavGroup>
+          {(acesso("dashboard_producao") || acesso("planejamento_producao") || acesso("produtos_producao")) && (
+            <NavGroup label="🏭 Produção" show={true}>
+              {acesso("dashboard_producao") && sideNavBtn("📊", "Dashboard", tab === "dashboard_producao", () => { setTab("dashboard_producao"); setSidebarOpen(false); })}
+              {acesso("planejamento_producao") && sideNavBtn("📅", "Planejamento", tab === "planejamento_producao", () => { setTab("planejamento_producao"); setSidebarOpen(false); })}
+              {acesso("produtos_producao") && sideNavBtn("📦", "Produtos", tab === "produtos_producao", () => { setTab("produtos_producao"); setSidebarOpen(false); })}
+            </NavGroup>
+          )}
+          {(acesso("dashboard_producao") || acesso("planejamento_producao") || acesso("produtos_producao")) && (
+            <NavGroup label="🏭 Produção" show={true}>
+              {acesso("dashboard_producao") && sideNavBtn("📊", "Dashboard", tab === "dashboard_producao", () => { setTab("dashboard_producao"); setSidebarOpen(false); })}
+              {acesso("planejamento_producao") && sideNavBtn("📅", "Planejamento", tab === "planejamento_producao", () => { setTab("planejamento_producao"); setSidebarOpen(false); })}
+              {acesso("produtos_producao") && sideNavBtn("📦", "Produtos", tab === "produtos_producao", () => { setTab("produtos_producao"); setSidebarOpen(false); })}
+            </NavGroup>
+          )}
+          {(acesso("dashboard_producao") || acesso("planejamento_producao") || acesso("cadastro_produtos")) && (
+            <NavGroup label="🏭 Produção" show={true}>
+              {acesso("dashboard_producao") && sideNavBtn("📊", "Dashboard", tab === "dashboard_producao", () => { setTab("dashboard_producao"); setSidebarOpen(false); })}
+              {acesso("planejamento_producao") && sideNavBtn("📅", "Planejamento", tab === "planejamento_producao", () => { setTab("planejamento_producao"); setSidebarOpen(false); })}
+              {acesso("cadastro_produtos") && sideNavBtn("📦", "Produtos", tab === "cadastro_produtos", () => { setTab("cadastro_produtos"); setSidebarOpen(false); })}
+            </NavGroup>
+          )}
+          {(acesso("dashboard_producao") || acesso("planejamento_producao") || acesso("cadastro_produtos")) && (
+            <NavGroup label="🏭 Produção" show={true}>
+              {acesso("dashboard_producao") && sideNavBtn("📊", "Dashboard", tab === "dashboard_producao", () => { setTab("dashboard_producao"); setSidebarOpen(false); })}
+              {acesso("planejamento_producao") && sideNavBtn("📅", "Planejamento", tab === "planejamento_producao", () => { setTab("planejamento_producao"); setSidebarOpen(false); })}
+              {acesso("cadastro_produtos") && sideNavBtn("📦", "Produtos", tab === "cadastro_produtos", () => { setTab("cadastro_produtos"); setSidebarOpen(false); })}
+            </NavGroup>
+          )}
           {perfil === "admin" && (
             <NavGroup label="⚙️ Admin" show={true}>
               {sideNavBtn("⚙️", "Configurações", tab === "configuracoes", () => { setTab("configuracoes"); setSidebarOpen(false); })}
@@ -1326,7 +2059,7 @@ export default function App() {
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí 360°</div>
             <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.05em" }}>
-              {tab === "dashboard" ? "Dashboard" : tab === "registros" ? "Abastecimentos" : tab === "checklist" ? "Checklist" : tab === "motoristas" ? "Motoristas" : tab === "veiculos" ? "Veículos" : tab === "configuracoes" ? "Configurações" : tab === "ocorrencias" ? "Ocorrências" : ""}
+              {tab === "dashboard" ? "Dashboard" : tab === "registros" ? "Abastecimentos" : tab === "checklist" ? "Checklist" : tab === "motoristas" ? "Motoristas" : tab === "veiculos" ? "Veículos" : tab === "configuracoes" ? "Configurações" : tab === "ocorrencias" ? "Ocorrências" : tab === "dashboard_producao" ? "Dashboard Produção" : tab === "planejamento_producao" ? "Planejamento" : tab === "produtos_producao" ? "Produtos" : ""}
             </div>
           </div>
         </div>
@@ -2060,6 +2793,33 @@ export default function App() {
         )}
 
         {/* CONFIGURAÇÕES */}
+
+        {/* DASHBOARD PRODUÇÃO */}
+        {!loading && tab === "dashboard_producao" && acesso("dashboard_producao") && (
+          <DashboardProducaoTab planejamentos={planejamentos} produtosProducao={produtosProducao} />
+        )}
+
+        {/* PLANEJAMENTO PRODUÇÃO */}
+        {!loading && tab === "planejamento_producao" && acesso("planejamento_producao") && (
+          <PlanejamentoProducaoTab
+            planejamentos={planejamentos}
+            produtosProducao={produtosProducao}
+            canEdit={acesso("planejamento_producao")}
+            onSave={async (data) => { await api("planejamento_producao", "POST", data); await loadAll(); }}
+            onUpdate={async (id, data) => { await api(`planejamento_producao?id=eq.${id}`, "PATCH", data); await loadAll(); }}
+            onDelete={async (id) => { await api(`planejamento_producao?id=eq.${id}`, "DELETE"); await loadAll(); }}
+          />
+        )}
+
+        {/* CADASTRO PRODUTOS PRODUÇÃO */}
+        {!loading && tab === "cadastro_produtos" && acesso("cadastro_produtos") && (
+          <CadastroProdutosTab
+            produtosProducao={produtosProducao}
+            onSave={async (data) => { await api("produtos_producao", "POST", data); await loadAll(); }}
+            onUpdate={async (id, data) => { await api(`produtos_producao?id=eq.${id}`, "PATCH", data); await loadAll(); }}
+          />
+        )}
+
         {tab === "configuracoes" && perfil === "admin" && (
           <div style={{ padding: "0 16px" }}>
             <ConfiguracoesTab user={user} SUPABASE_URL={SUPABASE_URL} SUPABASE_KEY={SUPABASE_KEY} PERFIS={PERFIS} />
