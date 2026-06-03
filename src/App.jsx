@@ -1660,7 +1660,7 @@ export default function App() {
               </>
             }
 
-            {/* ───── RESULTADOS DO MÊS ───── */}
+            {/* ───── RESULTADOS DO MÊS + SCORE LADO A LADO ───── */}
             {(() => {
               const hoje = new Date();
               const mesIni = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
@@ -1674,77 +1674,74 @@ export default function App() {
                 penMes[nome] = Math.min(100, penMes[nome] + (o.penalidade || 0));
               });
               const motAtivos = motoristas.filter(m => m.ativo !== false);
-              if (motAtivos.length === 0) return null;
-              const sorted = [...motAtivos].sort((a, b) => {
-                const pa = penMes[a.nome] || 0;
-                const pb = penMes[b.nome] || 0;
-                return pa - pb; // menos penalidade primeiro
-              });
+              const sortedMeta = [...motAtivos].sort((a, b) => (penMes[a.nome]||0) - (penMes[b.nome]||0));
+              const scoreAtivos = scoreMotoristas.filter(m => { const mot = motoristas.find(x => x.nome === m.nome); return !mot || mot.ativo !== false; });
               return (
-                <div style={{ marginTop: 20 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                    🎯 Resultados do Mês
-                    <span style={{ fontSize: 11, color: "#64748b", fontWeight: 400, textTransform: "capitalize" }}>{nomeMes}</span>
-                  </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 20 }}>
+                  {/* Resultados do Mês */}
                   <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
-                    {sorted.map((m, i) => {
-                      const pen = penMes[m.nome] || 0;
-                      const metaRestante = Math.max(0, 100 - pen);
-                      const cor = metaRestante === 100 ? "#10b981" : metaRestante >= 50 ? "#fbbf24" : "#f87171";
-                      const ocCount = ocMes.filter(o => o.motorista_nome === m.nome || o.motorista_id === m.id).length;
-                      const pct = metaRestante;
-                      return (
-                        <div key={m.id} style={{ padding: "12px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-                            <div style={{ width: 24, height: 24, borderRadius: "50%", background: cor + "20", border: `1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: cor, flexShrink: 0 }}>{i+1}</div>
-                            <div style={{ flex: 1, fontWeight: 600, fontSize: 13, color: "#f1f5f9" }}>{m.nome}</div>
-                            <div style={{ fontSize: 11, color: "#475569" }}>{ocCount > 0 ? `${ocCount} ocorrência${ocCount > 1 ? "s" : ""}` : "—"}</div>
-                            <div style={{ fontWeight: 700, fontSize: 15, color: cor, minWidth: 48, textAlign: "right" }}>{metaRestante}%</div>
-                          </div>
-                          <div style={{ height: 4, background: "#1e293b", borderRadius: 99 }}>
-                            <div style={{ height: "100%", width: `${pct}%`, background: cor, borderRadius: 99 }} />
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>🎯 Resultados do Mês</div>
+                      <span style={{ fontSize: 11, color: "#64748b", textTransform: "capitalize" }}>{nomeMes}</span>
+                    </div>
+                    <div style={{ overflowY: "auto", maxHeight: 400 }}>
+                      {sortedMeta.length === 0
+                        ? <div style={{ padding: 24, textAlign: "center", color: "#475569", fontSize: 13 }}>Nenhum motorista ativo.</div>
+                        : sortedMeta.map((m, i) => {
+                            const pen = penMes[m.nome] || 0;
+                            const metaRestante = Math.max(0, 100 - pen);
+                            const cor = metaRestante === 100 ? "#10b981" : metaRestante >= 50 ? "#fbbf24" : "#f87171";
+                            const ocCount = ocMes.filter(o => o.motorista_nome === m.nome || o.motorista_id === m.id).length;
+                            return (
+                              <div key={m.id} style={{ padding: "11px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
+                                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: cor+"20", border:`1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: cor, flexShrink: 0 }}>{i+1}</div>
+                                  <div style={{ flex: 1, fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
+                                  <div style={{ fontSize: 10, color: "#475569" }}>{ocCount > 0 ? `${ocCount} oc.` : "—"}</div>
+                                  <div style={{ fontWeight: 700, fontSize: 14, color: cor, minWidth: 44, textAlign: "right" }}>{metaRestante}%</div>
+                                </div>
+                                <div style={{ height: 3, background: "#1e293b", borderRadius: 99 }}>
+                                  <div style={{ height: "100%", width: `${metaRestante}%`, background: cor, borderRadius: 99 }} />
+                                </div>
+                              </div>
+                            );
+                          })
+                      }
+                    </div>
+                  </div>
+
+                  {/* Score dos Motoristas */}
+                  <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b" }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>🏅 Score dos Motoristas</div>
+                    </div>
+                    <div style={{ overflowY: "auto", maxHeight: 400 }}>
+                      {scoreAtivos.length === 0
+                        ? <div style={{ padding: 24, textAlign: "center", color: "#475569", fontSize: 13 }}>Sem dados suficientes.</div>
+                        : scoreAtivos.map((m, i) => {
+                            const cor = m.score >= 80 ? "#10b981" : m.score >= 60 ? "#fbbf24" : "#f87171";
+                            return (
+                              <div key={i} style={{ padding: "11px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
+                                  <div style={{ width: 22, height: 22, borderRadius: "50%", background: cor+"20", border:`1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: cor, flexShrink: 0 }}>{i+1}</div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
+                                    <div style={{ fontSize: 10, color: "#475569" }}>{TIPO_ICON[m.tipo]||""} {m.tipo} · {m.kml} km/L</div>
+                                  </div>
+                                  <div style={{ fontWeight: 700, fontSize: 14, color: cor, minWidth: 44, textAlign: "right" }}>{m.score}<span style={{ fontSize: 9, color: "#475569" }}>/100</span></div>
+                                </div>
+                                <div style={{ height: 3, background: "#1e293b", borderRadius: 99 }}>
+                                  <div style={{ height: "100%", width: `${m.score}%`, background: cor, borderRadius: 99 }} />
+                                </div>
+                              </div>
+                            );
+                          })
+                      }
+                    </div>
                   </div>
                 </div>
               );
             })()}
-
-            {/* ───── SCORE DOS MOTORISTAS ───── */}
-            {scoreMotoristas.length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12 }}>🏅 Score dos Motoristas</div>
-                <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
-                  {scoreMotoristas.filter(m => {
-                    const mot = motoristas.find(x => x.nome === m.nome);
-                    return !mot || mot.ativo !== false;
-                  }).map((m, i) => {
-                    const cor = m.score >= 80 ? "#10b981" : m.score >= 60 ? "#fbbf24" : "#f87171";
-                    return (
-                      <div key={i} style={{ padding: "12px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: cor + "20", border: `1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: cor, flexShrink: 0 }}>{i+1}</div>
-                          <div style={{ flex: 1 }}>
-                            <span style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9" }}>{m.nome}</span>
-                            <span style={{ marginLeft: 8, fontSize: 11, color: "#475569" }}>{TIPO_ICON[m.tipo] || ""} {m.tipo}</span>
-                          </div>
-                          <div style={{ fontSize: 11, color: "#64748b", textAlign: "right" }}>
-                            <span style={{ color: "#94a3b8" }}>{m.kml} km/L</span>
-                            <span style={{ color: "#475569" }}> · {m.viagens} viag.</span>
-                          </div>
-                          <div style={{ fontWeight: 700, fontSize: 15, color: cor, minWidth: 48, textAlign: "right" }}>{m.score}<span style={{ fontSize: 9, color: "#475569" }}>/100</span></div>
-                        </div>
-                        <div style={{ height: 4, background: "#1e293b", borderRadius: 99 }}>
-                          <div style={{ height: "100%", width: `${m.score}%`, background: cor, borderRadius: 99 }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
           </div>
         )}
