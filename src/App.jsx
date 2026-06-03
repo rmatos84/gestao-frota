@@ -95,7 +95,7 @@ const ITENS_MOTO = [
   { id: "epi", label: "🦺 EPI Completo (Luva, joelheira, colete refletivo, calçado fechado)" },
 ];
 
-const emptyMotorista = { nome: "", cnh: "", telefone: "" };
+const emptyMotorista = { nome: "", cnh: "", telefone: "", ativo: true };
 const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
 const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "" };
 
@@ -103,11 +103,10 @@ const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veicu
 
 // ─── Ocorrências ─────────────────────────────────────────────
 const TIPOS_OCORRENCIA = [
-  { id: "erro_conduta",      label: "Erro de conduta",        penalidade: 50,  icone: "⚠️",  desc: "Comportamento inadequado, reclamação de cliente, etc." },
-  { id: "segundo_erro",      label: "2º erro no mês",         penalidade: 100, icone: "🚫",  desc: "Segundo erro registrado no mesmo mês" },
-  { id: "sem_abastecimento", label: "Não abasteceu o veículo",penalidade: 100, icone: "⛽",  desc: "Devolveu o veículo sem abastecer" },
-  { id: "sem_checklist",     label: "Não fez o checklist",    penalidade: 100, icone: "📋",  desc: "Pegou ou devolveu o veículo sem fazer o checklist" },
-  { id: "outro",             label: "Outro",                  penalidade: 0,   icone: "📝",  desc: "Descreva a ocorrência e informe a penalidade manualmente" },
+  { id: "erro_conduta",      label: "Erro de conduta",         penalidade: 50,  icone: "⚠️",  desc: "Comportamento inadequado, reclamação de cliente, etc." },
+  { id: "sem_abastecimento", label: "Não abasteceu o veículo", penalidade: 100, icone: "⛽",  desc: "Devolveu o veículo sem abastecer" },
+  { id: "sem_checklist",     label: "Não fez o checklist",     penalidade: 100, icone: "📋",  desc: "Pegou ou devolveu o veículo sem fazer o checklist" },
+  { id: "outro",             label: "Outro",                   penalidade: 0,   icone: "📝",  desc: "Descreva a ocorrência e informe a penalidade manualmente" },
 ];
 
 function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, onSave, onDelete }) {
@@ -185,7 +184,7 @@ function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, o
               <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Motorista</label>
               <select value={form.motorista_id} onChange={e => setForm(p => ({...p, motorista_id: e.target.value}))} style={inputStyle}>
                 <option value="">Selecione...</option>
-                {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                {motoristas.filter(m => m.ativo !== false).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
               </select>
             </div>
             <div>
@@ -1301,20 +1300,16 @@ export default function App() {
 
         {/* Nav items - colapsáveis */}
         <div style={{ flex: 1, padding: "8px 10px" }}>
-          <NavGroup label="🚚 Logística" show={acesso("dashboard") || acesso("registros") || acesso("checklist")}>
+          <NavGroup label="🚚 Logística" show={acesso("dashboard") || acesso("registros") || acesso("checklist") || acesso("ocorrencias")}>
             {acesso("dashboard") && sideNavBtn("📊", "Dashboard", tab === "dashboard", () => { setTab("dashboard"); setSidebarOpen(false); })}
             {acesso("registros") && sideNavBtn("⛽", "Abastecimentos", tab === "registros", () => { setTab("registros"); setSidebarOpen(false); })}
             {acesso("checklist") && sideNavBtn("✅", "Checklist", tab === "checklist", () => { setTab("checklist"); setSidebarOpen(false); })}
+            {acesso("ocorrencias") && sideNavBtn("📝", "Ocorrências", tab === "ocorrencias", () => { setTab("ocorrencias"); setSidebarOpen(false); })}
           </NavGroup>
           <NavGroup label="📋 Cadastros" show={acesso("motoristas") || acesso("veiculos")}>
             {acesso("motoristas") && sideNavBtn("👤", "Motoristas", tab === "motoristas", () => { setTab("motoristas"); setSidebarOpen(false); })}
             {acesso("veiculos") && sideNavBtn("🚗", "Veículos", tab === "veiculos", () => { setTab("veiculos"); setSidebarOpen(false); })}
           </NavGroup>
-          {(acesso("ocorrencias")) && (
-            <NavGroup label="📝 Operações" show={true}>
-              {acesso("ocorrencias") && sideNavBtn("📝", "Ocorrências", tab === "ocorrencias", () => { setTab("ocorrencias"); setSidebarOpen(false); })}
-            </NavGroup>
-          )}
           {perfil === "admin" && (
             <NavGroup label="⚙️ Admin" show={true}>
               {sideNavBtn("⚙️", "Configurações", tab === "configuracoes", () => { setTab("configuracoes"); setSidebarOpen(false); })}
@@ -1390,7 +1385,7 @@ export default function App() {
                     </div>
                     <div>
                       <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Motorista</label>
-                      {sel(ckMotoristaId, setCkMotoristaId, <><option value="">Selecione...</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}</>)}
+                      {sel(ckMotoristaId, setCkMotoristaId, <><option value="">Selecione...</option>{motoristas.filter(m => m.ativo !== false).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}</>)}
                     </div>
                     <div>
                       <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Data</label>
@@ -1578,6 +1573,117 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* ───── RESULTADOS DO MÊS ───── */}
+            {(() => {
+              const hoje = new Date();
+              const mesIni = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
+              const mesFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split("T")[0];
+              const nomeMes = hoje.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+
+              // Ocorrências do mês atual
+              const ocMes = ocorrencias.filter(o => o.data >= mesIni && o.data <= mesFim);
+
+              // Calcular penalidade acumulada por motorista no mês
+              const penMes = {};
+              ocMes.forEach(o => {
+                const nome = o.motorista_nome || o.motorista_id;
+                if (!penMes[nome]) penMes[nome] = 0;
+                penMes[nome] = Math.min(100, penMes[nome] + (o.penalidade || 0));
+              });
+
+              // Motoristas ativos com resultado
+              const motAtivos = motoristas.filter(m => m.ativo !== false);
+              if (motAtivos.length === 0) return null;
+
+              return (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    🎯 Resultados do Mês
+                    <span style={{ fontSize: 11, color: "#64748b", fontWeight: 400 }}>{nomeMes}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                    {motAtivos.map((m, i) => {
+                      const pen = penMes[m.nome] || 0;
+                      const metaRestante = Math.max(0, 100 - pen);
+                      const cor = metaRestante === 100 ? "#10b981" : metaRestante >= 50 ? "#fbbf24" : "#f87171";
+                      const ocMotMes = ocMes.filter(o => o.motorista_nome === m.nome || o.motorista_id === m.id);
+                      return (
+                        <div key={m.id} style={{ background: "#0f172a", border: `1px solid ${cor}30`, borderRadius: 12, padding: "14px 16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                            <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#1e293b,#334155)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>👤</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
+                              <div style={{ fontSize: 10, color: "#475569" }}>{ocMotMes.length > 0 ? `${ocMotMes.length} ocorrência${ocMotMes.length > 1 ? "s" : ""}` : "Sem ocorrências"}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: cor, lineHeight: 1 }}>{metaRestante}%</div>
+                              <div style={{ fontSize: 9, color: "#475569" }}>da meta</div>
+                            </div>
+                          </div>
+                          <div style={{ height: 6, background: "#1e293b", borderRadius: 99, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${metaRestante}%`, background: cor, borderRadius: 99, transition: "width 0.4s" }} />
+                          </div>
+                          {pen > 0 && <div style={{ fontSize: 10, color: "#f87171", marginTop: 6 }}>−{pen}% em penalidades</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ───── RESULTADOS DO MÊS ───── */}
+            {(() => {
+              const hoje = new Date();
+              const mesIni = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
+              const mesFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split("T")[0];
+              const nomeMes = hoje.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+              const ocMes = ocorrencias.filter(o => o.data >= mesIni && o.data <= mesFim);
+              const penMes = {};
+              ocMes.forEach(o => {
+                const nome = o.motorista_nome || o.motorista_id;
+                if (!penMes[nome]) penMes[nome] = 0;
+                penMes[nome] = Math.min(100, penMes[nome] + (o.penalidade || 0));
+              });
+              const motAtivos = motoristas.filter(m => m.ativo !== false);
+              if (motAtivos.length === 0) return null;
+              return (
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    🎯 Resultados do Mês
+                    <span style={{ fontSize: 11, color: "#64748b", fontWeight: 400, textTransform: "capitalize" }}>{nomeMes}</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+                    {motAtivos.map((m) => {
+                      const pen = penMes[m.nome] || 0;
+                      const metaRestante = Math.max(0, 100 - pen);
+                      const cor = metaRestante === 100 ? "#10b981" : metaRestante >= 50 ? "#fbbf24" : "#f87171";
+                      const ocMotMes = ocMes.filter(o => o.motorista_nome === m.nome || o.motorista_id === m.id);
+                      return (
+                        <div key={m.id} style={{ background: "#0f172a", border: `1px solid ${cor}30`, borderRadius: 12, padding: "14px 16px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                            <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#1e293b,#334155)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>👤</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
+                              <div style={{ fontSize: 10, color: "#475569" }}>{ocMotMes.length > 0 ? `${ocMotMes.length} ocorrência${ocMotMes.length > 1 ? "s" : ""}` : "Sem ocorrências ✓"}</div>
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: cor, lineHeight: 1 }}>{metaRestante}%</div>
+                              <div style={{ fontSize: 9, color: "#475569" }}>da meta</div>
+                            </div>
+                          </div>
+                          <div style={{ height: 6, background: "#1e293b", borderRadius: 99, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${metaRestante}%`, background: cor, borderRadius: 99 }} />
+                          </div>
+                          {pen > 0 && <div style={{ fontSize: 10, color: "#f87171", marginTop: 5 }}>−{pen}% em penalidades</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* ───── SCORE DOS MOTORISTAS ───── */}
             {scoreMotoristas.length > 0 && (
@@ -1800,7 +1906,7 @@ export default function App() {
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
                     <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>MOTORISTA</label>
                       <select value={formAbast.motorista_id} onChange={e => setFormAbast(p => ({...p,motorista_id:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
-                        <option value="">Selecione...</option>{motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                        <option value="">Selecione...</option>{motoristas.filter(m => m.ativo !== false).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                       </select>
                     </div>
                     <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>VEÍCULO</label>
@@ -1929,10 +2035,27 @@ export default function App() {
             )}
             <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflow:"hidden" }}>
               {motoristas.length === 0 ? <div style={{ padding:40, textAlign:"center", color:"#475569" }}>Nenhum motorista cadastrado.</div>
-                : motoristas.map((m,i) => <div key={m.id} style={{ padding:"14px 18px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{ width:36, height:36, background:"linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>👤</div>
-                  <div><div style={{ fontWeight:600, color:"#f1f5f9", fontSize:14 }}>{m.nome}</div><div style={{ fontSize:11, color:"#475569" }}>{m.cnh?`CNH: ${m.cnh}`:""}{m.telefone?` · ${m.telefone}`:""}</div></div>
-                </div>)}
+                : motoristas.map((m,i) => (
+                  <div key={m.id} style={{ padding:"14px 18px", borderTop:i>0?"1px solid #1e293b":"none", display:"flex", alignItems:"center", gap:12, opacity: m.ativo === false ? 0.5 : 1 }}>
+                    <div style={{ width:36, height:36, background: m.ativo === false ? "#1e293b" : "linear-gradient(135deg,#1e293b,#334155)", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16 }}>
+                      {m.ativo === false ? "🚫" : "👤"}
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:600, color: m.ativo === false ? "#475569" : "#f1f5f9", fontSize:14 }}>{m.nome}</div>
+                      <div style={{ fontSize:11, color:"#475569" }}>
+                        {m.cnh?`CNH: ${m.cnh}`:""}{m.telefone?` · ${m.telefone}`:""}
+                        {m.ativo === false && <span style={{ marginLeft:6, color:"#f87171", background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", borderRadius:99, padding:"1px 7px", fontSize:10 }}>Inativo</span>}
+                      </div>
+                    </div>
+                    <button onClick={async () => {
+                      const novoStatus = m.ativo === false ? true : false;
+                      await api(`motoristas?id=eq.${m.id}`, "PATCH", { ativo: novoStatus });
+                      await loadAll();
+                    }} style={{ background: m.ativo === false ? "rgba(16,185,129,0.1)" : "rgba(248,113,113,0.1)", border: m.ativo === false ? "1px solid rgba(16,185,129,0.2)" : "1px solid rgba(248,113,113,0.2)", color: m.ativo === false ? "#10b981" : "#f87171", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>
+                      {m.ativo === false ? "✓ Reativar" : "Desativar"}
+                    </button>
+                  </div>
+                ))}
             </div>
           </div>
         )}
