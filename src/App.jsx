@@ -29,6 +29,42 @@ const PERMISSOES = {
   },
 };
 
+const MENU_GRUPOS = [
+  { grupo: "Logística", icone: "🚚", modulos: [
+    { id: "dashboard",   label: "Dashboard",      icone: "📊", desc: "KM rodados, consumo, rankings e alertas da frota" },
+    { id: "registros",   label: "Abastecimentos", icone: "⛽", desc: "Registre e consulte todos os abastecimentos" },
+    { id: "checklist",   label: "Checklist",      icone: "✅", desc: "Inspeção diária de veículos" },
+    { id: "ocorrencias", label: "Ocorrências",    icone: "📝", desc: "Registre penalidades e erros de conduta" },
+  ]},
+  { grupo: "Cadastros", icone: "📋", modulos: [
+    { id: "motoristas",  label: "Motoristas",     icone: "👤", desc: "Gerencie o cadastro de motoristas" },
+    { id: "veiculos",    label: "Veículos",       icone: "🚗", desc: "Gerencie a frota de veículos" },
+  ]},
+  { grupo: "Produção", icone: "🏭", modulos: [
+    { id: "dashboard_producao",    label: "Dashboard",    icone: "📊", desc: "Acompanhe metas e realizações de produção" },
+    { id: "planejamento_producao", label: "Planejamento", icone: "📅", desc: "Registre o planejamento diário de produção" },
+    { id: "cadastro_produtos",     label: "Produtos",     icone: "📦", desc: "Cadastro de produtos e categorias" },
+  ]},
+  { grupo: "Admin", icone: "⚙️", modulos: [
+    { id: "configuracoes", label: "Configurações", icone: "⚙️", desc: "Usuários, perfis e permissões do sistema" },
+  ]},
+];
+
+const getGrupo = (tabId) => {
+  for (const g of MENU_GRUPOS) {
+    if (g.modulos.find(m => m.id === tabId)) return g.grupo;
+  }
+  return null;
+};
+
+const getModulo = (tabId) => {
+  for (const g of MENU_GRUPOS) {
+    const m = g.modulos.find(m => m.id === tabId);
+    if (m) return m;
+  }
+  return null;
+};
+
 const temAcesso = (perfil, modulo) => {
   const p = PERMISSOES[perfil];
   if (!p) return false;
@@ -1224,13 +1260,7 @@ export default function App() {
     setUser(null);
   };
 
-  const defaultTab = (() => {
-    const p = user?.perfil || "motorista";
-    if (temAcesso(p, "dashboard")) return "dashboard";
-    if (temAcesso(p, "dashboard_producao")) return "dashboard_producao";
-    return "checklist";
-  })();
-  const [tab, setTab] = useState(defaultTab);
+  const defaultTab = "home";
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [logisticaOpen, setLogisticaOpen] = useState(false);
   const [cadastroOpen, setCadastroOpen] = useState(false);
@@ -1286,6 +1316,15 @@ export default function App() {
   const [motSort, setMotSort] = useState({ col: "nome", dir: "asc" });
   const [veiSort, setVeiSort] = useState({ col: "modelo", dir: "asc" });
   const [ckSort, setCkSort] = useState({ col: "data", dir: "desc" });
+  const [ckFiltroMot, setCkFiltroMot] = useState("");
+  const [ckFiltroVei, setCkFiltroVei] = useState("");
+  const [ckFiltroTipo, setCkFiltroTipo] = useState("");
+  const [ckFiltroIni, setCkFiltroIni] = useState("");
+  const [ckFiltroFim, setCkFiltroFim] = useState("");
+  const [ckSortCol, setCkSortCol] = useState("data");
+  const [ckSortDir, setCkSortDir] = useState("desc");
+  const [ckExpanded, setCkExpanded] = useState(null);
+  const [tab, setTab] = useState("home");
   const [abastPage, setAbastPage] = useState(0);
   const ABAST_PER_PAGE = 50;
 
@@ -1732,7 +1771,7 @@ export default function App() {
       <div style={{ position: "fixed", top: 0, right: sidebarOpen ? 0 : -280, width: 260, height: "100vh", background: "#0f172a", borderLeft: "1px solid #1e293b", zIndex: 400, transition: "right 0.25s ease", display: "flex", flexDirection: "column", overflowY: "auto" }}>
         {/* Header com logo e fechar */}
         <div style={{ padding: "18px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 32, height: 32, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📋</div>
+          <div onClick={() => { setTab("home"); setSidebarOpen(false); }} style={{ width: 32, height: 32, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0, cursor:"pointer" }}>🍇</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Gestão 360°</div>
             <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.08em" }}>SUPREMO AÇAÍ</div>
@@ -1756,6 +1795,10 @@ export default function App() {
 
         {/* Nav items - colapsáveis */}
         <div style={{ flex: 1, padding: "8px 10px" }}>
+          <button onClick={() => { setTab("home"); setSidebarOpen(false); }}
+            style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 14px", borderRadius:10, border:"none", cursor:"pointer", fontSize:13, fontWeight: tab==="home"?600:400, background: tab==="home"?"linear-gradient(135deg,rgba(6,182,212,0.2),rgba(59,130,246,0.2))":"transparent", color: tab==="home"?"#06b6d4":"#94a3b8", marginBottom:4, textAlign:"left", borderLeft: tab==="home"?"3px solid #06b6d4":"3px solid transparent" }}>
+            <span style={{ fontSize:16 }}>🏠</span> Home
+          </button>
           <NavGroup label="🚚 Logística" show={acesso("dashboard") || acesso("registros") || acesso("checklist") || acesso("ocorrencias")}>
             {acesso("dashboard") && sideNavBtn("📊", "Dashboard", tab === "dashboard", () => { setTab("dashboard"); setSidebarOpen(false); })}
             {acesso("registros") && sideNavBtn("⛽", "Abastecimentos", tab === "registros", () => { setTab("registros"); setSidebarOpen(false); })}
@@ -1783,17 +1826,25 @@ export default function App() {
 
       {/* Topbar */}
       <div style={{ background: "#0f172a", borderBottom: "1px solid #1e293b", padding: "10px 16px", display: "flex", alignItems: "center", position: "sticky", top: 0, zIndex: 200 }}>
-        {/* Logo + Nome */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>📋</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí 360°</div>
-            <div style={{ fontSize: 9, color: "#475569", letterSpacing: "0.05em" }}>
-              {tab === "dashboard" ? "Dashboard" : tab === "registros" ? "Abastecimentos" : tab === "checklist" ? "Checklist" : tab === "motoristas" ? "Motoristas" : tab === "veiculos" ? "Veículos" : tab === "configuracoes" ? "Configurações" : tab === "ocorrencias" ? "Ocorrências" : tab === "dashboard_producao" ? "Dashboard Produção" : tab === "planejamento_producao" ? "Planejamento" : tab === "produtos_producao" ? "Produtos" : ""}
-            </div>
-          </div>
+        {/* Logo clicável → home */}
+        <div onClick={() => setTab("home")} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+          <div style={{ width: 28, height: 28, background: "linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>🍇</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí 360°</div>
         </div>
-        {/* Hamburger no lado direito */}
+        {/* Breadcrumb */}
+        {tab !== "home" && (() => {
+          const grupo = getGrupo(tab);
+          const modulo = getModulo(tab);
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 16, fontSize: 12 }}>
+              <span style={{ color: "#334155" }}>›</span>
+              <button onClick={() => setTab("home")} style={{ background:"none", border:"none", color:"#475569", cursor:"pointer", fontSize:12, padding:"0 2px" }}>Home</button>
+              {grupo && <><span style={{ color: "#334155" }}>›</span><span style={{ color: "#475569" }}>{grupo}</span></>}
+              {modulo && <><span style={{ color: "#334155" }}>›</span><span style={{ color: "#06b6d4", fontWeight: 600 }}>{modulo.label}</span></>}
+            </div>
+          );
+        })()}
+        {/* Hamburger */}
         <button onClick={() => setSidebarOpen(true)}
           style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 22, lineHeight: 1, padding: "2px 6px", flexShrink: 0 }}>
           ☰
@@ -1953,16 +2004,6 @@ export default function App() {
 
             {/* Histórico */}
             {ckView === "history" && (() => {
-              // Filtros locais do histórico
-              const [ckFiltroMot, setCkFiltroMot] = React.useState("");
-              const [ckFiltroVei, setCkFiltroVei] = React.useState("");
-              const [ckFiltroTipo, setCkFiltroTipo] = React.useState("");
-              const [ckFiltroIni, setCkFiltroIni] = React.useState("");
-              const [ckFiltroFim, setCkFiltroFim] = React.useState("");
-              const [ckSortCol, setCkSortCol] = React.useState("data");
-              const [ckSortDir, setCkSortDir] = React.useState("desc");
-              const [ckExpanded, setCkExpanded] = React.useState(null);
-
               const ckFiltrados = checklists.filter(c => {
                 if (ckFiltroMot && c.motorista_id !== ckFiltroMot) return false;
                 if (ckFiltroVei && c.veiculo_id !== ckFiltroVei) return false;
@@ -2103,6 +2144,47 @@ export default function App() {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* HOME */}
+        {tab === "home" && (
+          <div>
+            {/* Boas vindas */}
+            <div style={{ background:"linear-gradient(135deg,rgba(6,182,212,0.1),rgba(59,130,246,0.1))", border:"1px solid rgba(6,182,212,0.2)", borderRadius:20, padding:"28px 24px", marginBottom:24, display:"flex", alignItems:"center", gap:20 }}>
+              <div style={{ width:56, height:56, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", borderRadius:16, display:"flex", alignItems:"center", justifyContent:"center", fontSize:28, flexShrink:0 }}>👤</div>
+              <div>
+                <div style={{ fontSize:22, fontWeight:700, color:"#f1f5f9", marginBottom:4 }}>Olá, {user?.nome}! 👋</div>
+                <div style={{ fontSize:13, color:"#64748b" }}>
+                  Logado como <span style={{ color:PERFIS[perfil]?.color||"#06b6d4", fontWeight:600 }}>{PERFIS[perfil]?.label||perfil}</span> · Supremo Açaí 360°
+                </div>
+              </div>
+            </div>
+
+            {/* Grupos de módulos */}
+            {MENU_GRUPOS.map(grupo => {
+              const modulosAcessiveis = grupo.modulos.filter(m => acesso(m.id));
+              if (modulosAcessiveis.length === 0) return null;
+              return (
+                <div key={grupo.grupo} style={{ marginBottom:24 }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:"#475569", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12, display:"flex", alignItems:"center", gap:8 }}>
+                    <span>{grupo.icone}</span> {grupo.grupo}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:12 }}>
+                    {modulosAcessiveis.map(m => (
+                      <button key={m.id} onClick={() => setTab(m.id)}
+                        style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"left", transition:"all 0.15s" }}
+                        onMouseEnter={e => { e.currentTarget.style.border="1px solid #06b6d4"; e.currentTarget.style.background="rgba(6,182,212,0.05)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.border="1px solid #1e293b"; e.currentTarget.style.background="#0f172a"; }}>
+                        <div style={{ fontSize:28, marginBottom:10 }}>{m.icone}</div>
+                        <div style={{ fontWeight:700, fontSize:14, color:"#f1f5f9", marginBottom:4 }}>{m.label}</div>
+                        <div style={{ fontSize:12, color:"#475569", lineHeight:1.4 }}>{m.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -2657,6 +2739,7 @@ export default function App() {
       </div>
 
       <style>{`* { box-sizing: border-box; } body, html { margin: 0; padding: 0; background: #0a0f1a; } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
+      <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍇</text></svg>" />
     </div>
   );
 }
