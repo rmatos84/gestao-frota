@@ -588,6 +588,152 @@ function CadastroProdutosTab({ produtosProducao, onSave, onUpdate, onDelete }) {
   );
 }
 
+
+// ─── Checklist Histórico ─────────────────────────────────────
+function ChecklistHistorico({ checklists, motoristas, veiculos, ckFiltroMot, setCkFiltroMot, ckFiltroVei, setCkFiltroVei, ckFiltroTipo, setCkFiltroTipo, ckFiltroIni, setCkFiltroIni, ckFiltroFim, setCkFiltroFim, ckSortCol, setCkSortCol, ckSortDir, setCkSortDir, ckExpanded, setCkExpanded }) {
+  const ckFiltrados = checklists.filter(c => {
+    if (ckFiltroMot && c.motorista_id !== ckFiltroMot) return false;
+    if (ckFiltroVei && c.veiculo_id !== ckFiltroVei) return false;
+    if (ckFiltroTipo && c.tipo_veiculo !== ckFiltroTipo) return false;
+    if (ckFiltroIni && c.data < ckFiltroIni) return false;
+    if (ckFiltroFim && c.data > ckFiltroFim) return false;
+    return true;
+  }).sort((a, b) => {
+    let va, vb;
+    if (ckSortCol === "data") { va = a.data; vb = b.data; }
+    else if (ckSortCol === "motorista") { va = a.motorista_nome||""; vb = b.motorista_nome||""; }
+    else if (ckSortCol === "veiculo") { va = a.veiculo_descricao||""; vb = b.veiculo_descricao||""; }
+    else if (ckSortCol === "tipo") { va = a.tipo_veiculo||""; vb = b.tipo_veiculo||""; }
+    else if (ckSortCol === "km") { va = parseFloat(a.km||0); vb = parseFloat(b.km||0); }
+    else if (ckSortCol === "ok") { va = Object.values(a.itens||{}).filter(v=>v===true).length; vb = Object.values(b.itens||{}).filter(v=>v===true).length; }
+    else { va = a[ckSortCol]||""; vb = b[ckSortCol]||""; }
+    if (va < vb) return ckSortDir === "asc" ? -1 : 1;
+    if (va > vb) return ckSortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const temFiltro = ckFiltroMot || ckFiltroVei || ckFiltroTipo || ckFiltroIni || ckFiltroFim;
+  const inpS = { width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" };
+
+  const SortTh = ({ col, label }) => {
+    const active = ckSortCol === col;
+    return (
+      <th onClick={() => { setCkSortDir(ckSortCol===col && ckSortDir==="asc" ? "desc" : "asc"); setCkSortCol(col); }}
+        style={{ padding:"10px 14px", textAlign:"left", color:active?"#06b6d4":"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap", cursor:"pointer", userSelect:"none" }}>
+        {label} {active ? (ckSortDir==="asc"?"▲":"▼") : "⇅"}
+      </th>
+    );
+  };
+
+  return (
+    <div>
+      <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:14, padding:"14px 16px", marginBottom:14 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+          <div style={{ fontSize:13, fontWeight:600, color:"#f1f5f9", display:"flex", alignItems:"center", gap:6 }}>
+            🔍 Filtros {temFiltro && <span style={{ fontSize:10, background:"rgba(6,182,212,0.2)", color:"#06b6d4", border:"1px solid rgba(6,182,212,0.3)", borderRadius:99, padding:"2px 8px" }}>ativos</span>}
+          </div>
+          {temFiltro && <button onClick={() => { setCkFiltroMot(""); setCkFiltroVei(""); setCkFiltroTipo(""); setCkFiltroIni(""); setCkFiltroFim(""); }} style={{ fontSize:11, color:"#f87171", background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", borderRadius:8, padding:"4px 10px", cursor:"pointer" }}>✕ Limpar</button>}
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Início</label>
+            <input type="date" value={ckFiltroIni} onChange={e=>setCkFiltroIni(e.target.value)} style={inpS} /></div>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Fim</label>
+            <input type="date" value={ckFiltroFim} onChange={e=>setCkFiltroFim(e.target.value)} style={inpS} /></div>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Tipo</label>
+            <select value={ckFiltroTipo} onChange={e=>setCkFiltroTipo(e.target.value)} style={inpS}>
+              <option value="">Todos</option>{TIPOS.map(t=><option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
+            </select></div>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Motorista</label>
+            <select value={ckFiltroMot} onChange={e=>setCkFiltroMot(e.target.value)} style={inpS}>
+              <option value="">Todos</option>{motoristas.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}
+            </select></div>
+          <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Veículo</label>
+            <select value={ckFiltroVei} onChange={e=>setCkFiltroVei(e.target.value)} style={inpS}>
+              <option value="">Todos</option>{veiculos.filter(v=>!ckFiltroTipo||v.tipo===ckFiltroTipo).map(v=><option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>)}
+            </select></div>
+        </div>
+      </div>
+
+      <div style={{ fontSize:12, color:"#64748b", marginBottom:10 }}>{ckFiltrados.length} registro{ckFiltrados.length!==1?"s":""} {temFiltro?"filtrados":"no total"}</div>
+
+      {ckFiltrados.length === 0
+        ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum checklist encontrado.</div>
+        : <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+              <thead>
+                <tr style={{ background:"#0a0f1a" }}>
+                  <SortTh col="data" label="Data" />
+                  <SortTh col="motorista" label="Motorista" />
+                  <SortTh col="veiculo" label="Veículo" />
+                  <SortTh col="tipo" label="Tipo" />
+                  <SortTh col="km" label="KM" />
+                  <SortTh col="ok" label="Itens" />
+                  <th style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase" }}>Obs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ckFiltrados.map((c, i) => {
+                  const itens = c.itens || {};
+                  const okCount = Object.values(itens).filter(v=>v===true).length;
+                  const nokCount = Object.values(itens).filter(v=>v===false).length;
+                  const total = Object.keys(itens).length;
+                  const isExpanded = ckExpanded === c.id;
+                  return (
+                    <React.Fragment key={c.id}>
+                      <tr style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
+                        <td style={{ padding:"11px 14px", color:"#94a3b8", whiteSpace:"nowrap" }}>{c.data}</td>
+                        <td style={{ padding:"11px 14px", fontWeight:600, color:"#f1f5f9" }}>{c.motorista_nome}</td>
+                        <td style={{ padding:"11px 14px", color:"#94a3b8" }}>{c.veiculo_descricao}</td>
+                        <td style={{ padding:"11px 14px" }}>
+                          <span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:`${TIPO_COLOR[c.tipo_veiculo]||"#334155"}20`, color:TIPO_COLOR[c.tipo_veiculo]||"#64748b", border:`1px solid ${TIPO_COLOR[c.tipo_veiculo]||"#334155"}40` }}>
+                            {TIPO_ICON[c.tipo_veiculo]||""} {c.tipo_veiculo||"—"}
+                          </span>
+                        </td>
+                        <td style={{ padding:"11px 14px", color:"#06b6d4" }}>{c.km ? parseFloat(c.km).toLocaleString() : "—"}</td>
+                        <td style={{ padding:"11px 14px", minWidth:140 }}>
+                          {total > 0 ? (
+                            <div>
+                              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
+                                <span style={{ fontSize:11, color:nokCount===0?"#10b981":"#fbbf24", fontWeight:600 }}>{okCount}/{total}</span>
+                                {nokCount > 0 && <span style={{ fontSize:11, color:"#f87171", fontWeight:600 }}>−{nokCount} NOK</span>}
+                              </div>
+                              <div style={{ height:5, background:"#1e293b", borderRadius:99, overflow:"hidden" }}>
+                                <div style={{ height:"100%", width:`${(okCount/total)*100}%`, background:nokCount===0?"#10b981":"#fbbf24", borderRadius:99 }} />
+                              </div>
+                            </div>
+                          ) : <span style={{ color:"#334155" }}>—</span>}
+                        </td>
+                        <td style={{ padding:"11px 14px" }}>
+                          {c.observacao
+                            ? <button onClick={() => setCkExpanded(isExpanded ? null : c.id)}
+                                title={c.observacao}
+                                style={{ background:isExpanded?"rgba(6,182,212,0.15)":"#1e293b", border:`1px solid ${isExpanded?"rgba(6,182,212,0.4)":"#334155"}`, color:isExpanded?"#06b6d4":"#64748b", borderRadius:7, padding:"5px 10px", fontSize:13, cursor:"pointer" }}>
+                                📋
+                              </button>
+                            : <span style={{ color:"#334155", fontSize:12 }}>—</span>}
+                        </td>
+                      </tr>
+                      {isExpanded && c.observacao && (
+                        <tr style={{ borderTop:"1px solid #1e293b" }}>
+                          <td colSpan={7} style={{ padding:"12px 20px", background:"#0a0f1a" }}>
+                            <div style={{ background:"#1e293b", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#cbd5e1", lineHeight:1.6 }}>
+                              <span style={{ fontSize:10, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:4 }}>Observação do motorista</span>
+                              {c.observacao}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+      }
+    </div>
+  );
+}
+
 // ─── Ocorrências ─────────────────────────────────────────────
 const TIPOS_OCORRENCIA = [
   { id: "erro_conduta",      label: "Erro de conduta",         penalidade: 50,  icone: "⚠️",  desc: "Comportamento inadequado, reclamação de cliente, etc." },
@@ -2003,147 +2149,21 @@ export default function App() {
             )}
 
             {/* Histórico */}
-            {ckView === "history" && (() => {
-              const ckFiltrados = checklists.filter(c => {
-                if (ckFiltroMot && c.motorista_id !== ckFiltroMot) return false;
-                if (ckFiltroVei && c.veiculo_id !== ckFiltroVei) return false;
-                if (ckFiltroTipo && c.tipo_veiculo !== ckFiltroTipo) return false;
-                if (ckFiltroIni && c.data < ckFiltroIni) return false;
-                if (ckFiltroFim && c.data > ckFiltroFim) return false;
-                return true;
-              }).sort((a, b) => {
-                let va, vb;
-                if (ckSortCol === "data") { va = a.data; vb = b.data; }
-                else if (ckSortCol === "motorista") { va = a.motorista_nome||""; vb = b.motorista_nome||""; }
-                else if (ckSortCol === "veiculo") { va = a.veiculo_descricao||""; vb = b.veiculo_descricao||""; }
-                else if (ckSortCol === "tipo") { va = a.tipo_veiculo||""; vb = b.tipo_veiculo||""; }
-                else if (ckSortCol === "km") { va = parseFloat(a.km||0); vb = parseFloat(b.km||0); }
-                else if (ckSortCol === "ok") { va = Object.values(a.itens||{}).filter(v=>v===true).length; vb = Object.values(b.itens||{}).filter(v=>v===true).length; }
-                else { va = a[ckSortCol]||""; vb = b[ckSortCol]||""; }
-                if (va < vb) return ckSortDir === "asc" ? -1 : 1;
-                if (va > vb) return ckSortDir === "asc" ? 1 : -1;
-                return 0;
-              });
-
-              const temFiltro = ckFiltroMot || ckFiltroVei || ckFiltroTipo || ckFiltroIni || ckFiltroFim;
-              const inpS = { width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" };
-              const SortTh = ({ col, label }) => {
-                const active = ckSortCol === col;
-                return <th onClick={() => { setCkSortDir(ckSortCol===col && ckSortDir==="asc" ? "desc" : "asc"); setCkSortCol(col); }}
-                  style={{ padding:"10px 14px", textAlign:"left", color:active?"#06b6d4":"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap", cursor:"pointer", userSelect:"none" }}>
-                  {label} {active ? (ckSortDir==="asc"?"▲":"▼") : "⇅"}
-                </th>;
-              };
-
-              return (
-                <div>
-                  {/* Filtros */}
-                  <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:14, padding:"14px 16px", marginBottom:14 }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:"#f1f5f9", display:"flex", alignItems:"center", gap:6 }}>
-                        🔍 Filtros {temFiltro && <span style={{ fontSize:10, background:"rgba(6,182,212,0.2)", color:"#06b6d4", border:"1px solid rgba(6,182,212,0.3)", borderRadius:99, padding:"2px 8px" }}>ativos</span>}
-                      </div>
-                      {temFiltro && <button onClick={() => { setCkFiltroMot(""); setCkFiltroVei(""); setCkFiltroTipo(""); setCkFiltroIni(""); setCkFiltroFim(""); }} style={{ fontSize:11, color:"#f87171", background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", borderRadius:8, padding:"4px 10px", cursor:"pointer" }}>✕ Limpar</button>}
-                    </div>
-                    <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10 }}>
-                      <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Início</label>
-                        <input type="date" value={ckFiltroIni} onChange={e=>setCkFiltroIni(e.target.value)} style={inpS} /></div>
-                      <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Data Fim</label>
-                        <input type="date" value={ckFiltroFim} onChange={e=>setCkFiltroFim(e.target.value)} style={inpS} /></div>
-                      <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Tipo</label>
-                        <select value={ckFiltroTipo} onChange={e=>setCkFiltroTipo(e.target.value)} style={inpS}>
-                          <option value="">Todos</option>{TIPOS.map(t=><option key={t} value={t}>{TIPO_ICON[t]} {t}</option>)}
-                        </select></div>
-                      <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Motorista</label>
-                        <select value={ckFiltroMot} onChange={e=>setCkFiltroMot(e.target.value)} style={inpS}>
-                          <option value="">Todos</option>{motoristas.map(m=><option key={m.id} value={m.id}>{m.nome}</option>)}
-                        </select></div>
-                      <div><label style={{ fontSize:10, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Veículo</label>
-                        <select value={ckFiltroVei} onChange={e=>setCkFiltroVei(e.target.value)} style={inpS}>
-                          <option value="">Todos</option>{veiculos.filter(v=>!ckFiltroTipo||v.tipo===ckFiltroTipo).map(v=><option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>)}
-                        </select></div>
-                    </div>
-                  </div>
-
-                  <div style={{ fontSize:12, color:"#64748b", marginBottom:10 }}>{ckFiltrados.length} registro{ckFiltrados.length!==1?"s":""} {temFiltro?"filtrados":"no total"}</div>
-
-                  {ckFiltrados.length === 0
-                    ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum checklist encontrado.</div>
-                    : <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, overflowX:"auto" }}>
-                        <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                          <thead>
-                            <tr style={{ background:"#0a0f1a" }}>
-                              <SortTh col="data" label="Data" />
-                              <SortTh col="motorista" label="Motorista" />
-                              <SortTh col="veiculo" label="Veículo" />
-                              <SortTh col="tipo" label="Tipo" />
-                              <SortTh col="km" label="KM" />
-                              <SortTh col="ok" label="Itens" />
-                              <th style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase" }}>Obs</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ckFiltrados.map((c, i) => {
-                              const itens = c.itens || {};
-                              const okCount = Object.values(itens).filter(v=>v===true).length;
-                              const nokCount = Object.values(itens).filter(v=>v===false).length;
-                              const total = Object.keys(itens).length;
-                              const isExpanded = ckExpanded === c.id;
-                              return (
-                                <React.Fragment key={c.id}>
-                                  <tr style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
-                                    <td style={{ padding:"11px 14px", color:"#94a3b8", whiteSpace:"nowrap" }}>{c.data}</td>
-                                    <td style={{ padding:"11px 14px", fontWeight:600, color:"#f1f5f9" }}>{c.motorista_nome}</td>
-                                    <td style={{ padding:"11px 14px", color:"#94a3b8" }}>{c.veiculo_descricao}</td>
-                                    <td style={{ padding:"11px 14px" }}>
-                                      <span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:`${TIPO_COLOR[c.tipo_veiculo]||"#334155"}20`, color:TIPO_COLOR[c.tipo_veiculo]||"#64748b", border:`1px solid ${TIPO_COLOR[c.tipo_veiculo]||"#334155"}40` }}>
-                                        {TIPO_ICON[c.tipo_veiculo]||""} {c.tipo_veiculo||"—"}
-                                      </span>
-                                    </td>
-                                    <td style={{ padding:"11px 14px", color:"#06b6d4" }}>{c.km ? parseFloat(c.km).toLocaleString() : "—"}</td>
-                                    <td style={{ padding:"11px 14px", minWidth:140 }}>
-                                      {total > 0 ? (
-                                        <div>
-                                          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:4 }}>
-                                            <span style={{ fontSize:11, color: nokCount===0?"#10b981":"#fbbf24", fontWeight:600 }}>{okCount}/{total}</span>
-                                            {nokCount > 0 && <span style={{ fontSize:11, color:"#f87171", fontWeight:600 }}>−{nokCount} NOK</span>}
-                                          </div>
-                                          <div style={{ height:5, background:"#1e293b", borderRadius:99, overflow:"hidden" }}>
-                                            <div style={{ height:"100%", width:`${(okCount/total)*100}%`, background: nokCount===0?"#10b981":"#fbbf24", borderRadius:99 }} />
-                                          </div>
-                                        </div>
-                                      ) : <span style={{ color:"#334155" }}>—</span>}
-                                    </td>
-                                    <td style={{ padding:"11px 14px" }}>
-                                      {c.observacao
-                                        ? <button onClick={() => setCkExpanded(isExpanded ? null : c.id)}
-                                            title={c.observacao}
-                                            style={{ background: isExpanded?"rgba(6,182,212,0.15)":"#1e293b", border:`1px solid ${isExpanded?"rgba(6,182,212,0.4)":"#334155"}`, color: isExpanded?"#06b6d4":"#64748b", borderRadius:7, padding:"5px 10px", fontSize:13, cursor:"pointer" }}>
-                                            📋
-                                          </button>
-                                        : <span style={{ color:"#334155", fontSize:12 }}>—</span>}
-                                    </td>
-                                  </tr>
-                                  {isExpanded && c.observacao && (
-                                    <tr style={{ borderTop:"1px solid #1e293b" }}>
-                                      <td colSpan={7} style={{ padding:"12px 20px", background:"#0a0f1a" }}>
-                                        <div style={{ background:"#1e293b", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#cbd5e1", lineHeight:1.6 }}>
-                                          <span style={{ fontSize:10, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.05em", display:"block", marginBottom:4 }}>Observação do motorista</span>
-                                          {c.observacao}
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                  }
-                </div>
-              );
-            })()}
+            {ckView === "history" && (
+              <ChecklistHistorico
+                checklists={checklists}
+                motoristas={motoristas}
+                veiculos={veiculos}
+                ckFiltroMot={ckFiltroMot} setCkFiltroMot={setCkFiltroMot}
+                ckFiltroVei={ckFiltroVei} setCkFiltroVei={setCkFiltroVei}
+                ckFiltroTipo={ckFiltroTipo} setCkFiltroTipo={setCkFiltroTipo}
+                ckFiltroIni={ckFiltroIni} setCkFiltroIni={setCkFiltroIni}
+                ckFiltroFim={ckFiltroFim} setCkFiltroFim={setCkFiltroFim}
+                ckSortCol={ckSortCol} setCkSortCol={setCkSortCol}
+                ckSortDir={ckSortDir} setCkSortDir={setCkSortDir}
+                ckExpanded={ckExpanded} setCkExpanded={setCkExpanded}
+              />
+            )}
           </div>
         )}
 
