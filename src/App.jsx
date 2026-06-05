@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const SUPABASE_URL = "https://vwjetfypctzoimvvdsjo.supabase.co";
@@ -1978,18 +1978,14 @@ export default function App() {
           <div style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9", lineHeight: 1.2 }}>Supremo Açaí 360°</div>
         </div>
         {/* Breadcrumb */}
-        {tab !== "home" && (() => {
-          const grupo = getGrupo(tab);
-          const modulo = getModulo(tab);
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 16, fontSize: 12 }}>
-              <span style={{ color: "#334155" }}>›</span>
-              <button onClick={() => setTab("home")} style={{ background:"none", border:"none", color:"#475569", cursor:"pointer", fontSize:12, padding:"0 2px" }}>Home</button>
-              {grupo && <><span style={{ color: "#334155" }}>›</span><span style={{ color: "#475569" }}>{grupo}</span></>}
-              {modulo && <><span style={{ color: "#334155" }}>›</span><span style={{ color: "#06b6d4", fontWeight: 600 }}>{modulo.label}</span></>}
-            </div>
-          );
-        })()}
+        {tab !== "home" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: 16, fontSize: 12 }}>
+            <span style={{ color: "#334155" }}>›</span>
+            <button onClick={() => setTab("home")} style={{ background:"none", border:"none", color:"#475569", cursor:"pointer", fontSize:12, padding:"0 2px" }}>Home</button>
+            {getGrupo(tab) && <><span style={{ color: "#334155" }}>›</span><span style={{ color: "#475569" }}>{getGrupo(tab)}</span></>}
+            {getModulo(tab) && <><span style={{ color: "#334155" }}>›</span><span style={{ color: "#06b6d4", fontWeight: 600 }}>{getModulo(tab)?.label}</span></>}
+          </div>
+        )}
         {/* Hamburger */}
         <button onClick={() => setSidebarOpen(true)}
           style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 22, lineHeight: 1, padding: "2px 6px", flexShrink: 0 }}>
