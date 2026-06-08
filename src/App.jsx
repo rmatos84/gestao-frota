@@ -590,7 +590,7 @@ function CadastroProdutosTab({ produtosProducao, onSave, onUpdate, onDelete }) {
 
 
 // ─── Checklist Histórico ─────────────────────────────────────
-function ChecklistHistorico({ checklists, motoristas, veiculos, ckFiltroMot, setCkFiltroMot, ckFiltroVei, setCkFiltroVei, ckFiltroTipo, setCkFiltroTipo, ckFiltroIni, setCkFiltroIni, ckFiltroFim, setCkFiltroFim, ckSortCol, setCkSortCol, ckSortDir, setCkSortDir, ckExpanded, setCkExpanded }) {
+function ChecklistHistorico({ checklists, motoristas, veiculos, ckFiltroMot, setCkFiltroMot, ckFiltroVei, setCkFiltroVei, ckFiltroTipo, setCkFiltroTipo, ckFiltroIni, setCkFiltroIni, ckFiltroFim, setCkFiltroFim, ckSortCol, setCkSortCol, ckSortDir, setCkSortDir, ckExpanded, setCkExpanded, setCkDetalhes }) {
   const ckFiltrados = checklists.filter(c => {
     if (ckFiltroMot && c.motorista_id !== ckFiltroMot) return false;
     if (ckFiltroVei && c.veiculo_id !== ckFiltroVei) return false;
@@ -704,13 +704,20 @@ function ChecklistHistorico({ checklists, motoristas, veiculos, ckFiltroMot, set
                           ) : <span style={{ color:"#334155" }}>—</span>}
                         </td>
                         <td style={{ padding:"11px 14px" }}>
-                          {c.observacao
-                            ? <button onClick={() => setCkExpanded(isExpanded ? null : c.id)}
-                                title={c.observacao}
-                                style={{ background:isExpanded?"rgba(6,182,212,0.15)":"#1e293b", border:`1px solid ${isExpanded?"rgba(6,182,212,0.4)":"#334155"}`, color:isExpanded?"#06b6d4":"#64748b", borderRadius:7, padding:"5px 10px", fontSize:13, cursor:"pointer" }}>
-                                📋
-                              </button>
-                            : <span style={{ color:"#334155", fontSize:12 }}>—</span>}
+                          <div style={{ display:"flex", gap:6 }}>
+                            {c.observacao
+                              ? <button onClick={() => setCkExpanded(isExpanded ? null : c.id)}
+                                  title={c.observacao}
+                                  style={{ background:isExpanded?"rgba(6,182,212,0.15)":"#1e293b", border:`1px solid ${isExpanded?"rgba(6,182,212,0.4)":"#334155"}`, color:isExpanded?"#06b6d4":"#64748b", borderRadius:7, padding:"5px 10px", fontSize:13, cursor:"pointer" }}>
+                                  📋
+                                </button>
+                              : <span style={{ color:"#334155", fontSize:12, padding:"5px 4px" }}>—</span>}
+                            <button onClick={() => setCkDetalhes(c)}
+                              title="Ver detalhes do checklist"
+                              style={{ background:"#1e293b", border:"1px solid #334155", color:"#8b5cf6", borderRadius:7, padding:"5px 10px", fontSize:13, cursor:"pointer" }}>
+                              🔍
+                            </button>
+                          </div>
                         </td>
                       </tr>
                       {isExpanded && c.observacao && (
@@ -1470,6 +1477,7 @@ export default function App() {
   const [ckSortCol, setCkSortCol] = useState("data");
   const [ckSortDir, setCkSortDir] = useState("desc");
   const [ckExpanded, setCkExpanded] = useState(null);
+  const [ckDetalhes, setCkDetalhes] = useState(null);
   const [tab, setTab] = useState("home");
   const [abastPage, setAbastPage] = useState(0);
   const ABAST_PER_PAGE = 50;
@@ -2158,6 +2166,7 @@ export default function App() {
                 ckSortCol={ckSortCol} setCkSortCol={setCkSortCol}
                 ckSortDir={ckSortDir} setCkSortDir={setCkSortDir}
                 ckExpanded={ckExpanded} setCkExpanded={setCkExpanded}
+                setCkDetalhes={setCkDetalhes}
               />
             )}
           </div>
@@ -2753,6 +2762,134 @@ export default function App() {
           </div>
         )}
       </div>
+
+            {/* MODAL DETALHES CHECKLIST */}
+      {ckDetalhes && (
+        <div onClick={() => setCkDetalhes(null)}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:20, width:"100%", maxWidth:680, maxHeight:"90vh", overflowY:"auto" }}>
+            {/* Header */}
+            <div style={{ padding:"20px 24px", borderBottom:"1px solid #1e293b", display:"flex", alignItems:"center", gap:14 }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:`${TIPO_COLOR[ckDetalhes.tipo_veiculo]||"#334155"}20`, border:`1px solid ${TIPO_COLOR[ckDetalhes.tipo_veiculo]||"#334155"}40`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
+                {TIPO_ICON[ckDetalhes.tipo_veiculo]||"🚘"}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:16, color:"#f1f5f9" }}>{ckDetalhes.veiculo_descricao}</div>
+                <div style={{ fontSize:12, color:"#475569", marginTop:2 }}>
+                  {ckDetalhes.motorista_nome} · {ckDetalhes.data}{ckDetalhes.km ? ` · ${parseFloat(ckDetalhes.km).toLocaleString()} km` : ""}
+                </div>
+              </div>
+              {(() => {
+                const itens = ckDetalhes.itens || {};
+                const ok = Object.values(itens).filter(v=>v===true).length;
+                const nok = Object.values(itens).filter(v=>v===false).length;
+                const total = Object.keys(itens).length;
+                const cor = nok===0 ? "#10b981" : "#fbbf24";
+                return (
+                  <div style={{ textAlign:"right", flexShrink:0 }}>
+                    <div style={{ fontSize:20, fontWeight:800, color:cor }}>{ok}/{total}</div>
+                    {nok > 0 && <div style={{ fontSize:11, color:"#f87171", fontWeight:600 }}>−{nok} NOK</div>}
+                  </div>
+                );
+              })()}
+              <button onClick={() => setCkDetalhes(null)}
+                style={{ background:"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:8, padding:"6px 10px", fontSize:16, cursor:"pointer", flexShrink:0 }}>✕</button>
+            </div>
+
+            {/* Barra de progresso */}
+            {(() => {
+              const itens = ckDetalhes.itens || {};
+              const ok = Object.values(itens).filter(v=>v===true).length;
+              const total = Object.keys(itens).length;
+              const pct = total > 0 ? (ok/total)*100 : 0;
+              const nok = Object.values(itens).filter(v=>v===false).length;
+              return (
+                <div style={{ padding:"12px 24px", borderBottom:"1px solid #1e293b" }}>
+                  <div style={{ height:8, background:"#1e293b", borderRadius:99, overflow:"hidden" }}>
+                    <div style={{ height:"100%", width:`${pct}%`, background:nok===0?"#10b981":"#fbbf24", borderRadius:99 }} />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Itens NOK primeiro, depois OK */}
+            <div style={{ padding:"16px 24px" }}>
+              {(() => {
+                const itens = ckDetalhes.itens || {};
+                const itensRef = [...ITENS_CARRO, ...ITENS_MOTO];
+                const nokItens = Object.entries(itens).filter(([,v])=>v===false);
+                const okItens = Object.entries(itens).filter(([,v])=>v===true);
+                const semResposta = Object.entries(itens).filter(([,v])=>v!==true && v!==false);
+                return (
+                  <>
+                    {nokItens.length > 0 && (
+                      <div style={{ marginBottom:16 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"#f87171", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+                          ❌ Itens com Problema ({nokItens.length})
+                        </div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {nokItens.map(([id]) => {
+                            const item = itensRef.find(x=>x.id===id);
+                            return (
+                              <div key={id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 14px", background:"rgba(248,113,113,0.08)", border:"1px solid rgba(248,113,113,0.2)", borderRadius:10 }}>
+                                <span style={{ fontSize:16 }}>❌</span>
+                                <span style={{ fontSize:13, color:"#fca5a5" }}>{item?.label||id}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {okItens.length > 0 && (
+                      <div style={{ marginBottom:16 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"#10b981", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>
+                          ✅ Itens OK ({okItens.length})
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:6 }}>
+                          {okItens.map(([id]) => {
+                            const item = itensRef.find(x=>x.id===id);
+                            return (
+                              <div key={id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", background:"rgba(16,185,129,0.05)", border:"1px solid rgba(16,185,129,0.15)", borderRadius:8 }}>
+                                <span style={{ fontSize:14 }}>✅</span>
+                                <span style={{ fontSize:12, color:"#94a3b8" }}>{item?.label||id}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {semResposta.length > 0 && (
+                      <div style={{ marginBottom:16 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>
+                          — Não verificados ({semResposta.length})
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:6 }}>
+                          {semResposta.map(([id]) => {
+                            const item = itensRef.find(x=>x.id===id);
+                            return (
+                              <div key={id} style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", background:"#1e293b", border:"1px solid #334155", borderRadius:8 }}>
+                                <span style={{ fontSize:14, color:"#475569" }}>—</span>
+                                <span style={{ fontSize:12, color:"#475569" }}>{item?.label||id}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {ckDetalhes.observacao && (
+                      <div style={{ background:"#1e293b", borderRadius:10, padding:"12px 16px" }}>
+                        <div style={{ fontSize:10, color:"#64748b", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Observação</div>
+                        <div style={{ fontSize:13, color:"#cbd5e1", lineHeight:1.6 }}>{ckDetalhes.observacao}</div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`* { box-sizing: border-box; } body, html { margin: 0; padding: 0; background: #0a0f1a; } @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }`}</style>
       <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍇</text></svg>" />
