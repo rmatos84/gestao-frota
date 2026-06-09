@@ -1681,53 +1681,67 @@ export default function App() {
       // Benchmark = média histórica 3 meses do MESMO TIPO (consistente com ranking)
       const benchKml = benchPorTipo[tipo]?.kml || kmlMot || 1;
 
-      // Eficiência (40pts): escala relativa à média do tipo
-      // acima de 5% = 40pts, na média = 32pts, abaixo 5% = 24pts, abaixo 15% = 16, abaixo 25% = 8
-      let scoreEfic;
+      // Score = ratio km/L do motorista vs média do tipo, escalado 0-100
       const ratio = benchKml > 0 ? kmlMot / benchKml : 1;
-      if (ratio >= 1.15) scoreEfic = 40;
-      else if (ratio >= 1.05) scoreEfic = 36;
-      else if (ratio >= 0.95) scoreEfic = 30;
-      else if (ratio >= 0.85) scoreEfic = 20;
-      else if (ratio >= 0.75) scoreEfic = 10;
-      else scoreEfic = 4;
+      // Escala: 0.60x = 0pts, 1.00x = 60pts, 1.40x = 100pts (linear por partes)
+      let score;
+      if (ratio >= 1.0) score = Math.min(100, Math.round(60 + (ratio - 1.0) * 100));
+      else score = Math.max(0, Math.round(ratio * 60));
 
-      // Regularidade (30pts): coeficiente de variação do km/L
-      let scoreReg = 30;
-      if (registros.length >= 3) {
-        const kmls = registros.map(r => {
-          const km = r.km_final - r.km_inicial;
-          const l = parseFloat(r.combustivel_litros || 1);
-          return km / l;
-        });
-        const media = kmls.reduce((a, b) => a + b, 0) / kmls.length;
-        const desvio = Math.sqrt(kmls.reduce((s, v) => s + Math.pow(v - media, 2), 0) / kmls.length);
-        const cv = media > 0 ? (desvio / media) * 100 : 0;
-        scoreReg = cv < 5 ? 30 : cv < 10 ? 24 : cv < 20 ? 16 : cv < 30 ? 8 : 4;
-      }
-
-      // Checklist (30pts): % de itens OK nos últimos 5 checklists
-      let scoreCk = 15;
-      const cksMot = checklists.filter(c => c.motorista_id === motorista_id || c.motorista_nome === nome).slice(0, 5);
-      if (cksMot.length > 0) {
-        let tot = 0, ok = 0;
-        cksMot.forEach(c => { const vals = Object.values(c.itens || {}); tot += vals.length; ok += vals.filter(v => v === true).length; });
-        scoreCk = tot > 0 ? Math.round((ok / tot) * 30) : 15;
-      }
-
-      const total = scoreEfic + scoreReg + scoreCk;
-      // Label de eficiência relativa ao tipo
       const efLabel = ratio >= 1.05 ? "acima" : ratio < 0.95 ? "abaixo" : "media";
 
       result.push({
         nome, tipo, motorista_id,
-        score: total, scoreEfic, scoreReg, scoreCk,
+        score, ratio,
         kml: kmlMot.toFixed(2), benchKml: benchKml.toFixed(2),
         viagens: registros.length, efLabel,
       });
     });
 
-    return result.sort((a, b) => b.score - a.score);
+    // Consolidar motoristas que dirigem múltiplos tipos: score ponderado por km rodado
+    const porNome = {};
+    result.forEach(r => {
+      if (!porNome[r.nome]) porNome[r.nome] = { nome: r.nome, motorista_id: r.motorista_id, entradas: [] };
+      porNome[r.nome].entradas.push(r);
+    });
+
+    return Object.values(porNome).map(({ nome, motorista_id, entradas }) => {
+      if (entradas.length === 1) return entradas[0];
+
+      // Múltiplos tipos: score ponderado pelo km total em cada tipo
+      const kmTotal = entradas.reduce((s, e) => {
+        const km = abastFiltrados
+          .filter(r => (r.motorista_nome === nome || r.motorista_id === motorista_id) && (() => {
+            const vei = veiculos.find(v => v.id === r.veiculo_id);
+            return vei?.tipo === e.tipo;
+          })())
+          .reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
+        e._kmTipo = km;
+        return s + km;
+      }, 0);
+
+      const scorePonderado = kmTotal > 0
+        ? Math.round(entradas.reduce((s, e) => s + e.score * (e._kmTipo / kmTotal), 0))
+        : Math.round(entradas.reduce((s, e) => s + e.score, 0) / entradas.length);
+
+      // Tipo principal = o que mais km rodou no período
+      const tipoPrincipal = entradas.sort((a, b) => (b._kmTipo||0) - (a._kmTipo||0))[0];
+
+      // Resumo dos tipos para exibição
+      const tiposResumo = entradas.map(e => `${TIPO_ICON[e.tipo]||""} ${e.tipo} ${e.kml}km/L`).join(" · ");
+
+      return {
+        nome, motorista_id,
+        score: scorePonderado,
+        tipo: tipoPrincipal.tipo,
+        kml: tipoPrincipal.kml,
+        benchKml: tipoPrincipal.benchKml,
+        efLabel: tipoPrincipal.efLabel,
+        viagens: entradas.reduce((s, e) => s + e.viagens, 0),
+        tiposResumo,
+        multiTipo: entradas.length > 1,
+      };
+    }).sort((a, b) => b.score - a.score);
   }, [abastFiltrados, abastecimentos, veiculos, checklists]);
 
   // ─── Alertas automáticos ─────────────────────────────────────
@@ -2495,19 +2509,18 @@ export default function App() {
                                   <div style={{ width: 22, height: 22, borderRadius: "50%", background: cor+"20", border:`1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: cor, flexShrink: 0 }}>{i+1}</div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
-                                    <div style={{ fontSize: 10, color: "#475569", display: "flex", alignItems: "center", gap: 6 }}>
-                                      {TIPO_ICON[m.tipo]||""} {m.tipo}
-                                      <span style={{ color: efCor, fontWeight: 600 }}>{efIcon} {m.kml} km/L</span>
-                                      <span style={{ color: "#334155" }}>· ref: {m.benchKml}</span>
-                                    </div>
+                                    {m.multiTipo
+                                      ? <div style={{ fontSize: 10, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tiposResumo}</div>
+                                      : <div style={{ fontSize: 10, color: "#475569", display: "flex", alignItems: "center", gap: 6 }}>
+                                          {TIPO_ICON[m.tipo]||""} {m.tipo}
+                                          <span style={{ color: efCor, fontWeight: 600 }}>{efIcon} {m.kml} km/L</span>
+                                          <span style={{ color: "#334155" }}>· ref: {m.benchKml}</span>
+                                        </div>
+                                    }
                                   </div>
                                   <div style={{ textAlign: "right" }}>
                                     <div style={{ fontWeight: 700, fontSize: 14, color: cor }}>{m.score}<span style={{ fontSize: 9, color: "#475569" }}>/100</span></div>
-                                    <div style={{ fontSize: 9, color: "#475569", display: "flex", gap: 4, justifyContent: "flex-end", marginTop: 1 }}>
-                                      <span title="Eficiência">⛽{m.scoreEfic}</span>
-                                      <span title="Regularidade">📊{m.scoreReg}</span>
-                                      <span title="Checklist">✅{m.scoreCk}</span>
-                                    </div>
+                                    {m.multiTipo && <div style={{ fontSize: 9, color: "#64748b", marginTop: 1 }}>ponderado</div>}
                                   </div>
                                 </div>
                                 <div style={{ height: 3, background: "#1e293b", borderRadius: 99 }}>
