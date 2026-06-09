@@ -1490,6 +1490,7 @@ export default function App() {
   const [ckSortDir, setCkSortDir] = useState("desc");
   const [ckExpanded, setCkExpanded] = useState(null);
   const [ckDetalhes, setCkDetalhes] = useState(null);
+  const [showRankingInfo, setShowRankingInfo] = useState(false);
   const [tab, setTab] = useState("home");
   const [abastPage, setAbastPage] = useState(0);
   const ABAST_PER_PAGE = 50;
@@ -1520,15 +1521,12 @@ export default function App() {
 
   useEffect(() => { if (user) loadAll(); }, [user]);
 
-  // Auto-refresh token when page becomes visible again
+  // Auto-refresh token silently when page becomes visible (no reload flash)
   useEffect(() => {
     const handleVisibility = async () => {
       if (document.visibilityState === "visible") {
         const refresh = localStorage.getItem("frota_refresh");
-        if (refresh) {
-          const ok = await doRefreshToken();
-          if (ok) loadAll();
-        }
+        if (refresh) doRefreshToken(); // só renova token, sem recarregar dados
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -2076,7 +2074,7 @@ export default function App() {
       {error && <div style={{ background: "#450a0a", border: "1px solid #7f1d1d", color: "#fca5a5", padding: "10px 24px", fontSize: 13, display: "flex", justifyContent: "space-between" }}>{error} <span style={{ cursor: "pointer" }} onClick={() => setError("")}>✕</span></div>}
 
       <div style={{ padding: "20px 16px" }}>
-        {loading && <div style={{ textAlign: "center", padding: 60, color: "#475569" }}>Carregando...</div>}
+        {loading && <div style={{ position: "fixed", bottom: 16, right: 16, background: "#1e293b", border: "1px solid #334155", borderRadius: 10, padding: "8px 14px", fontSize: 12, color: "#475569", zIndex: 100, display: "flex", alignItems: "center", gap: 8 }}><span style={{ animation: "pulse 1s infinite", display: "inline-block" }}>⟳</span> Atualizando...</div>}
 
         {/* ===== CHECKLIST ===== */}
         {!loading && tab === "checklist" && acesso("checklist") && (
@@ -2476,11 +2474,12 @@ export default function App() {
 
                   {/* Score dos Motoristas */}
                   <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
-                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b" }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", marginBottom: 6 }}>🏅 Ranking de Eficiência</div>
-                      <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.5 }}>
-                        Cada motorista é comparado com a média do seu tipo de veículo (moto vs moto, van vs van). O % mostra quanto está acima ou abaixo dessa média. Quem dirige múltiplos tipos tem score ponderado pelo nº de viagens em cada um.
-                      </div>
+                    <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>🏅 Ranking de Eficiência</div>
+                      <button onClick={() => setShowRankingInfo(true)}
+                        style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", color: "#818cf8", borderRadius: "50%", width: 20, height: 20, fontSize: 11, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontWeight: 700 }}>
+                        i
+                      </button>
                     </div>
                     <div style={{ overflowY: "auto", maxHeight: 400 }}>
                       {scoreAtivos.length === 0
@@ -2997,6 +2996,33 @@ export default function App() {
                   </>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+            {/* MODAL INFO RANKING EFICIÊNCIA */}
+      {showRankingInfo && (
+        <div onClick={() => setShowRankingInfo(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 20, width: "100%", maxWidth: 520, padding: 28 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🏅</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#f1f5f9" }}>Como funciona o Ranking?</div>
+                <div style={{ fontSize: 12, color: "#475569" }}>Metodologia de eficiência</div>
+              </div>
+              <button onClick={() => setShowRankingInfo(false)}
+                style={{ background: "#1e293b", border: "1px solid #334155", color: "#94a3b8", borderRadius: 8, padding: "6px 10px", fontSize: 16, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ background: "#1e293b", borderRadius: 12, padding: "16px 18px" }}>
+              <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.8, margin: 0 }}>
+                O ranking mede a <strong style={{ color: "#f1f5f9" }}>eficiência de combustível (km/L)</strong> de cada motorista em relação à média dos colegas que dirigem o <strong style={{ color: "#f1f5f9" }}>mesmo tipo de veículo</strong> — motoqueiros competem entre si, vaneiros entre si. O percentual indica o quanto cada um está acima ou abaixo dessa média: <strong style={{ color: "#10b981" }}>+18%</strong> significa 18% mais eficiente que a média do grupo.
+              </p>
+              <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.8, margin: "12px 0 0" }}>
+                Quando um motorista dirige mais de um tipo de veículo, o score final é uma <strong style={{ color: "#f1f5f9" }}>média ponderada pelo número de viagens</strong> em cada tipo — quem fez mais viagens na van tem esse desempenho com maior peso no resultado final.
+              </p>
             </div>
           </div>
         </div>
