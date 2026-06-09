@@ -1450,8 +1450,11 @@ export default function App() {
   const [recording, setRecording] = useState(false);
   const recognitionRef = useRef(null);
 
-  const [filtroDataInicio, setFiltroDataInicio] = useState("");
-  const [filtroDataFim, setFiltroDataFim] = useState("");
+  const [filtroDataInicio, setFiltroDataInicio] = useState(() => {
+    const hoje = new Date();
+    return new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
+  });
+  const [filtroDataFim, setFiltroDataFim] = useState(() => new Date().toISOString().split("T")[0]);
   const [filtroVeiculo, setFiltroVeiculo] = useState("");
   const [filtroMotorista, setFiltroMotorista] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("");
@@ -1561,7 +1564,10 @@ export default function App() {
     });
   }, [abastecimentos, filtroDataInicio, filtroDataFim, filtroVeiculo, filtroMotorista, filtroTipo, veiculos]);
 
-  const temFiltro = filtroDataInicio || filtroDataFim || filtroVeiculo || filtroMotorista || filtroTipo;
+  const hoje = new Date();
+  const mesIniPadrao = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
+  const hojePadrao = hoje.toISOString().split("T")[0];
+  const temFiltro = filtroVeiculo || filtroMotorista || filtroTipo || filtroDataInicio !== mesIniPadrao || filtroDataFim !== hojePadrao;
 
   const stats = useMemo(() => {
     const por = {};
@@ -1613,7 +1619,7 @@ export default function App() {
     const hoje = new Date();
     const result = [];
     const porMotTipo = {};
-    abastecimentos.forEach(r => {
+    abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo || "Sem tipo";
       const nome = r.motorista_nome || r.motorista_id;
@@ -1653,7 +1659,7 @@ export default function App() {
       result.push({ nome, tipo, motorista_id, score: scoreEfic + scoreReg + scoreCk, scoreEfic, scoreReg, scoreCk, kml: kmlMot.toFixed(2), benchKml: benchKml.toFixed(2), viagens: registros.length, diasSemAbast, ultimaData: ultimoAbast?.data || null });
     });
     return result.sort((a, b) => b.score - a.score);
-  }, [abastecimentos, veiculos, checklists]);
+  }, [abastFiltrados, veiculos, checklists]);
 
   // ─── Alertas automáticos ─────────────────────────────────────
   const alertas = useMemo(() => {
@@ -1661,7 +1667,7 @@ export default function App() {
 
     // Benchmark km/L por tipo
     const mediaTipo = {};
-    abastecimentos.forEach(r => {
+    abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo; if (!tipo) return;
       if (!mediaTipo[tipo]) mediaTipo[tipo] = { totalKm: 0, totalL: 0, precos: [] };
@@ -1741,7 +1747,7 @@ export default function App() {
     });
 
     return lista.sort((a, b) => ({ danger: 0, warning: 1, info: 2 }[a.tipo] ?? 3) - ({ danger: 0, warning: 1, info: 2 }[b.tipo] ?? 3));
-  }, [abastecimentos, veiculos, checklists]);
+  }, [abastFiltrados, veiculos, checklists]);
 
   const saveMotorista = async () => {
     if (!formMotorista.nome) return; setSaving(true);
@@ -2248,7 +2254,7 @@ export default function App() {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", display: "flex", alignItems: "center", gap: 6 }}>
                   🔍 Filtros {temFiltro && <span style={{ fontSize: 10, background: "rgba(6,182,212,0.2)", color: "#06b6d4", border: "1px solid rgba(6,182,212,0.3)", borderRadius: 99, padding: "2px 8px" }}>ativos</span>}
                 </div>
-                {temFiltro && <button onClick={() => { setFiltroDataInicio(""); setFiltroDataFim(""); setFiltroVeiculo(""); setFiltroMotorista(""); setFiltroTipo(""); }} style={{ fontSize: 11, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>✕ Limpar</button>}
+                {temFiltro && <button onClick={() => { const _hoje = new Date(); setFiltroDataInicio(new Date(_hoje.getFullYear(), _hoje.getMonth(), 1).toISOString().split("T")[0]); setFiltroDataFim(_hoje.toISOString().split("T")[0]); setFiltroVeiculo(""); setFiltroMotorista(""); setFiltroTipo(""); }} style={{ fontSize: 11, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 8, padding: "4px 10px", cursor: "pointer" }}>✕ Limpar</button>}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
                 <div><label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase" }}>Data Início</label>{inp(filtroDataInicio, setFiltroDataInicio, "", "date")}</div>
@@ -2331,11 +2337,10 @@ export default function App() {
 
             {/* ───── RESULTADOS DO MÊS + SCORE LADO A LADO ───── */}
             {(() => {
-              const hoje = new Date();
-              const mesIni = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split("T")[0];
-              const mesFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split("T")[0];
-              const nomeMes = hoje.toLocaleString("pt-BR", { month: "long", year: "numeric" });
-              const ocMes = ocorrencias.filter(o => o.data >= mesIni && o.data <= mesFim);
+              const mesIni = filtroDataInicio;
+              const mesFim = filtroDataFim;
+              const nomeMes = mesIni ? new Date(mesIni + "T12:00").toLocaleString("pt-BR", { month: "long", year: "numeric" }) : "Período selecionado";
+              const ocMes = ocorrencias.filter(o => (!mesIni || o.data >= mesIni) && (!mesFim || o.data <= mesFim));
               const penMes = {};
               ocMes.forEach(o => {
                 const nome = o.motorista_nome;
