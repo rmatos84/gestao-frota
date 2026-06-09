@@ -1644,8 +1644,25 @@ export default function App() {
 
   // ─── Score por Motorista ─────────────────────────────────────
   const scoreMotoristas = useMemo(() => {
-    const hoje = new Date();
     const result = [];
+
+    // Média histórica dos últimos 3 meses por tipo (igual ao rankingPorTipo)
+    const tres_meses = new Date();
+    tres_meses.setMonth(tres_meses.getMonth() - 3);
+    const dataLimite = tres_meses.toISOString().split("T")[0];
+    const benchPorTipo = {};
+    abastecimentos.filter(r => r.data >= dataLimite).forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo; if (!tipo) return;
+      if (!benchPorTipo[tipo]) benchPorTipo[tipo] = { km: 0, litros: 0 };
+      benchPorTipo[tipo].km += r.km_final - r.km_inicial;
+      benchPorTipo[tipo].litros += parseFloat(r.combustivel_litros || 0);
+    });
+    Object.keys(benchPorTipo).forEach(t => {
+      benchPorTipo[t].kml = benchPorTipo[t].litros > 0 ? benchPorTipo[t].km / benchPorTipo[t].litros : 0;
+    });
+
+    // Agrupar registros do período filtrado por motorista+tipo
     const porMotTipo = {};
     abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
@@ -1655,26 +1672,41 @@ export default function App() {
       if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, registros: [], motorista_id: r.motorista_id };
       porMotTipo[key].registros.push(r);
     });
-    const mediaTipo = {};
-    Object.values(porMotTipo).forEach(({ tipo, registros }) => {
-      if (!mediaTipo[tipo]) mediaTipo[tipo] = { totalKm: 0, totalL: 0 };
-      registros.forEach(r => { mediaTipo[tipo].totalKm += r.km_final - r.km_inicial; mediaTipo[tipo].totalL += parseFloat(r.combustivel_litros || 0); });
-    });
-    Object.keys(mediaTipo).forEach(t => { mediaTipo[t].kml = mediaTipo[t].totalL > 0 ? mediaTipo[t].totalKm / mediaTipo[t].totalL : 0; });
+
     Object.values(porMotTipo).forEach(({ nome, tipo, registros, motorista_id }) => {
       const totalKmMot = registros.reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
       const totalLMot = registros.reduce((s, r) => s + parseFloat(r.combustivel_litros || 0), 0);
       const kmlMot = totalLMot > 0 ? totalKmMot / totalLMot : 0;
-      const benchKml = mediaTipo[tipo]?.kml || kmlMot || 1;
-      const scoreEfic = Math.min(40, Math.round((kmlMot / benchKml) * 40));
+
+      // Benchmark = média histórica 3 meses do MESMO TIPO (consistente com ranking)
+      const benchKml = benchPorTipo[tipo]?.kml || kmlMot || 1;
+
+      // Eficiência (40pts): escala relativa à média do tipo
+      // acima de 5% = 40pts, na média = 32pts, abaixo 5% = 24pts, abaixo 15% = 16, abaixo 25% = 8
+      let scoreEfic;
+      const ratio = benchKml > 0 ? kmlMot / benchKml : 1;
+      if (ratio >= 1.15) scoreEfic = 40;
+      else if (ratio >= 1.05) scoreEfic = 36;
+      else if (ratio >= 0.95) scoreEfic = 30;
+      else if (ratio >= 0.85) scoreEfic = 20;
+      else if (ratio >= 0.75) scoreEfic = 10;
+      else scoreEfic = 4;
+
+      // Regularidade (30pts): coeficiente de variação do km/L
       let scoreReg = 30;
       if (registros.length >= 3) {
-        const kmls = registros.map(r => { const km = r.km_final - r.km_inicial; const l = parseFloat(r.combustivel_litros || 1); return km / l; });
+        const kmls = registros.map(r => {
+          const km = r.km_final - r.km_inicial;
+          const l = parseFloat(r.combustivel_litros || 1);
+          return km / l;
+        });
         const media = kmls.reduce((a, b) => a + b, 0) / kmls.length;
         const desvio = Math.sqrt(kmls.reduce((s, v) => s + Math.pow(v - media, 2), 0) / kmls.length);
         const cv = media > 0 ? (desvio / media) * 100 : 0;
-        scoreReg = cv < 5 ? 30 : cv < 10 ? 25 : cv < 20 ? 18 : cv < 30 ? 10 : 5;
+        scoreReg = cv < 5 ? 30 : cv < 10 ? 24 : cv < 20 ? 16 : cv < 30 ? 8 : 4;
       }
+
+      // Checklist (30pts): % de itens OK nos últimos 5 checklists
       let scoreCk = 15;
       const cksMot = checklists.filter(c => c.motorista_id === motorista_id || c.motorista_nome === nome).slice(0, 5);
       if (cksMot.length > 0) {
@@ -1682,12 +1714,21 @@ export default function App() {
         cksMot.forEach(c => { const vals = Object.values(c.itens || {}); tot += vals.length; ok += vals.filter(v => v === true).length; });
         scoreCk = tot > 0 ? Math.round((ok / tot) * 30) : 15;
       }
-      const ultimoAbast = [...registros].sort((a, b) => b.data > a.data ? 1 : -1)[0];
-      const diasSemAbast = ultimoAbast ? Math.floor((hoje - new Date(ultimoAbast.data)) / 86400000) : 999;
-      result.push({ nome, tipo, motorista_id, score: scoreEfic + scoreReg + scoreCk, scoreEfic, scoreReg, scoreCk, kml: kmlMot.toFixed(2), benchKml: benchKml.toFixed(2), viagens: registros.length, diasSemAbast, ultimaData: ultimoAbast?.data || null });
+
+      const total = scoreEfic + scoreReg + scoreCk;
+      // Label de eficiência relativa ao tipo
+      const efLabel = ratio >= 1.05 ? "acima" : ratio < 0.95 ? "abaixo" : "media";
+
+      result.push({
+        nome, tipo, motorista_id,
+        score: total, scoreEfic, scoreReg, scoreCk,
+        kml: kmlMot.toFixed(2), benchKml: benchKml.toFixed(2),
+        viagens: registros.length, efLabel,
+      });
     });
+
     return result.sort((a, b) => b.score - a.score);
-  }, [abastFiltrados, veiculos, checklists]);
+  }, [abastFiltrados, abastecimentos, veiculos, checklists]);
 
   // ─── Alertas automáticos ─────────────────────────────────────
   const alertas = useMemo(() => {
@@ -2446,15 +2487,28 @@ export default function App() {
                         ? <div style={{ padding: 24, textAlign: "center", color: "#475569", fontSize: 13 }}>Sem dados suficientes.</div>
                         : scoreAtivos.map((m, i) => {
                             const cor = m.score >= 80 ? "#10b981" : m.score >= 60 ? "#fbbf24" : "#f87171";
+                            const efCor = m.efLabel === "acima" ? "#10b981" : m.efLabel === "abaixo" ? "#f87171" : "#fbbf24";
+                            const efIcon = m.efLabel === "acima" ? "▲" : m.efLabel === "abaixo" ? "▼" : "=";
                             return (
                               <div key={i} style={{ padding: "11px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
                                   <div style={{ width: 22, height: 22, borderRadius: "50%", background: cor+"20", border:`1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: cor, flexShrink: 0 }}>{i+1}</div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
-                                    <div style={{ fontSize: 10, color: "#475569" }}>{TIPO_ICON[m.tipo]||""} {m.tipo} · {m.kml} km/L</div>
+                                    <div style={{ fontSize: 10, color: "#475569", display: "flex", alignItems: "center", gap: 6 }}>
+                                      {TIPO_ICON[m.tipo]||""} {m.tipo}
+                                      <span style={{ color: efCor, fontWeight: 600 }}>{efIcon} {m.kml} km/L</span>
+                                      <span style={{ color: "#334155" }}>· ref: {m.benchKml}</span>
+                                    </div>
                                   </div>
-                                  <div style={{ fontWeight: 700, fontSize: 14, color: cor, minWidth: 44, textAlign: "right" }}>{m.score}<span style={{ fontSize: 9, color: "#475569" }}>/100</span></div>
+                                  <div style={{ textAlign: "right" }}>
+                                    <div style={{ fontWeight: 700, fontSize: 14, color: cor }}>{m.score}<span style={{ fontSize: 9, color: "#475569" }}>/100</span></div>
+                                    <div style={{ fontSize: 9, color: "#475569", display: "flex", gap: 4, justifyContent: "flex-end", marginTop: 1 }}>
+                                      <span title="Eficiência">⛽{m.scoreEfic}</span>
+                                      <span title="Regularidade">📊{m.scoreReg}</span>
+                                      <span title="Checklist">✅{m.scoreCk}</span>
+                                    </div>
+                                  </div>
                                 </div>
                                 <div style={{ height: 3, background: "#1e293b", borderRadius: 99 }}>
                                   <div style={{ height: "100%", width: `${m.score}%`, background: cor, borderRadius: 99 }} />
