@@ -1644,105 +1644,75 @@ export default function App() {
 
   // ─── Score por Motorista ─────────────────────────────────────
   const scoreMotoristas = useMemo(() => {
-    const result = [];
-
-    // Média histórica dos últimos 3 meses por tipo (igual ao rankingPorTipo)
-    const tres_meses = new Date();
-    tres_meses.setMonth(tres_meses.getMonth() - 3);
-    const dataLimite = tres_meses.toISOString().split("T")[0];
-    const benchPorTipo = {};
-    abastecimentos.filter(r => r.data >= dataLimite).forEach(r => {
-      const vei = veiculos.find(v => v.id === r.veiculo_id);
-      const tipo = vei?.tipo; if (!tipo) return;
-      if (!benchPorTipo[tipo]) benchPorTipo[tipo] = { km: 0, litros: 0 };
-      benchPorTipo[tipo].km += r.km_final - r.km_inicial;
-      benchPorTipo[tipo].litros += parseFloat(r.combustivel_litros || 0);
-    });
-    Object.keys(benchPorTipo).forEach(t => {
-      benchPorTipo[t].kml = benchPorTipo[t].litros > 0 ? benchPorTipo[t].km / benchPorTipo[t].litros : 0;
-    });
-
-    // Agrupar registros do período filtrado por motorista+tipo
+    // Agrupar registros filtrados por motorista+tipo
     const porMotTipo = {};
     abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo || "Sem tipo";
       const nome = r.motorista_nome || r.motorista_id;
       const key = nome + "||" + tipo;
-      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, registros: [], motorista_id: r.motorista_id };
-      porMotTipo[key].registros.push(r);
+      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, motorista_id: r.motorista_id, km: 0, litros: 0, viagens: 0 };
+      porMotTipo[key].km += r.km_final - r.km_inicial;
+      porMotTipo[key].litros += parseFloat(r.combustivel_litros || 0);
+      porMotTipo[key].viagens += 1;
     });
 
-    Object.values(porMotTipo).forEach(({ nome, tipo, registros, motorista_id }) => {
-      const totalKmMot = registros.reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
-      const totalLMot = registros.reduce((s, r) => s + parseFloat(r.combustivel_litros || 0), 0);
-      const kmlMot = totalLMot > 0 ? totalKmMot / totalLMot : 0;
+    // Calcular km/L de cada motorista por tipo
+    const entradas = Object.values(porMotTipo).map(e => ({
+      ...e,
+      kml: e.litros > 0 ? e.km / e.litros : 0,
+    }));
 
-      // Benchmark = média histórica 3 meses do MESMO TIPO (consistente com ranking)
-      const benchKml = benchPorTipo[tipo]?.kml || kmlMot || 1;
-
-      // Score = ratio km/L do motorista vs média do tipo, escalado 0-100
-      const ratio = benchKml > 0 ? kmlMot / benchKml : 1;
-      // Escala: 0.60x = 0pts, 1.00x = 60pts, 1.40x = 100pts (linear por partes)
-      let score;
-      if (ratio >= 1.0) score = Math.min(100, Math.round(60 + (ratio - 1.0) * 100));
-      else score = Math.max(0, Math.round(ratio * 60));
-
-      const efLabel = ratio >= 1.05 ? "acima" : ratio < 0.95 ? "abaixo" : "media";
-
-      result.push({
-        nome, tipo, motorista_id,
-        score, ratio,
-        kml: kmlMot.toFixed(2), benchKml: benchKml.toFixed(2),
-        viagens: registros.length, efLabel,
-      });
+    // Média de km/L por tipo (referência do grupo)
+    const mediaPorTipo = {};
+    entradas.forEach(({ tipo, kml }) => {
+      if (!mediaPorTipo[tipo]) mediaPorTipo[tipo] = { soma: 0, n: 0 };
+      mediaPorTipo[tipo].soma += kml;
+      mediaPorTipo[tipo].n += 1;
+    });
+    Object.keys(mediaPorTipo).forEach(t => {
+      mediaPorTipo[t].media = mediaPorTipo[t].n > 0 ? mediaPorTipo[t].soma / mediaPorTipo[t].n : 0;
     });
 
-    // Consolidar motoristas que dirigem múltiplos tipos: score ponderado por km rodado
+    // Eficiência relativa (%) de cada motorista em cada tipo
+    const comEficiencia = entradas.map(e => {
+      const media = mediaPorTipo[e.tipo]?.media || e.kml;
+      const pct = media > 0 ? ((e.kml / media) - 1) * 100 : 0;
+      return { ...e, pct, mediaTipo: media };
+    });
+
+    // Consolidar por motorista: % ponderada pelo nº de viagens em cada tipo
     const porNome = {};
-    result.forEach(r => {
-      if (!porNome[r.nome]) porNome[r.nome] = { nome: r.nome, motorista_id: r.motorista_id, entradas: [] };
-      porNome[r.nome].entradas.push(r);
+    comEficiencia.forEach(e => {
+      if (!porNome[e.nome]) porNome[e.nome] = { nome: e.nome, motorista_id: e.motorista_id, entradas: [], totalViagens: 0 };
+      porNome[e.nome].entradas.push(e);
+      porNome[e.nome].totalViagens += e.viagens;
     });
 
-    return Object.values(porNome).map(({ nome, motorista_id, entradas }) => {
-      if (entradas.length === 1) return entradas[0];
+    return Object.values(porNome).map(({ nome, motorista_id, entradas, totalViagens }) => {
+      // Score = média ponderada das % de eficiência por viagens em cada tipo
+      const pctPonderada = totalViagens > 0
+        ? entradas.reduce((s, e) => s + e.pct * (e.viagens / totalViagens), 0)
+        : 0;
 
-      // Múltiplos tipos: score ponderado pelo km total em cada tipo
-      const kmTotal = entradas.reduce((s, e) => {
-        const km = abastFiltrados
-          .filter(r => (r.motorista_nome === nome || r.motorista_id === motorista_id) && (() => {
-            const vei = veiculos.find(v => v.id === r.veiculo_id);
-            return vei?.tipo === e.tipo;
-          })())
-          .reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
-        e._kmTipo = km;
-        return s + km;
-      }, 0);
-
-      const scorePonderado = kmTotal > 0
-        ? Math.round(entradas.reduce((s, e) => s + e.score * (e._kmTipo / kmTotal), 0))
-        : Math.round(entradas.reduce((s, e) => s + e.score, 0) / entradas.length);
-
-      // Tipo principal = o que mais km rodou no período
-      const tipoPrincipal = entradas.sort((a, b) => (b._kmTipo||0) - (a._kmTipo||0))[0];
-
-      // Resumo dos tipos para exibição
-      const tiposResumo = entradas.map(e => `${TIPO_ICON[e.tipo]||""} ${e.tipo} ${e.kml}km/L`).join(" · ");
+      // Tipo principal = onde mais viagens fez
+      const tipoPrincipal = [...entradas].sort((a, b) => b.viagens - a.viagens)[0];
+      const multiTipo = entradas.length > 1;
 
       return {
         nome, motorista_id,
-        score: scorePonderado,
+        pct: pctPonderada,
+        score: Math.max(0, Math.min(100, Math.round(50 + pctPonderada))),
+        entradas,
         tipo: tipoPrincipal.tipo,
-        kml: tipoPrincipal.kml,
-        benchKml: tipoPrincipal.benchKml,
-        efLabel: tipoPrincipal.efLabel,
-        viagens: entradas.reduce((s, e) => s + e.viagens, 0),
-        tiposResumo,
-        multiTipo: entradas.length > 1,
+        kml: tipoPrincipal.kml.toFixed(2),
+        benchKml: tipoPrincipal.mediaTipo.toFixed(2),
+        efLabel: pctPonderada >= 2 ? "acima" : pctPonderada <= -2 ? "abaixo" : "media",
+        viagens: totalViagens,
+        multiTipo,
       };
-    }).sort((a, b) => b.score - a.score);
-  }, [abastFiltrados, abastecimentos, veiculos, checklists]);
+    }).sort((a, b) => b.pct - a.pct);
+  }, [abastFiltrados, veiculos]);
 
   // ─── Alertas automáticos ─────────────────────────────────────
   const alertas = useMemo(() => {
@@ -2494,37 +2464,41 @@ export default function App() {
                   {/* Score dos Motoristas */}
                   <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
                     <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b" }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>🏅 Score dos Motoristas</div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9", marginBottom: 6 }}>🏅 Ranking de Eficiência</div>
+                      <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.5 }}>
+                        Cada motorista é comparado com a média do seu tipo de veículo (moto vs moto, van vs van). O % mostra quanto está acima ou abaixo dessa média. Quem dirige múltiplos tipos tem score ponderado pelo nº de viagens em cada um.
+                      </div>
                     </div>
                     <div style={{ overflowY: "auto", maxHeight: 400 }}>
                       {scoreAtivos.length === 0
                         ? <div style={{ padding: 24, textAlign: "center", color: "#475569", fontSize: 13 }}>Sem dados suficientes.</div>
                         : scoreAtivos.map((m, i) => {
-                            const cor = m.score >= 80 ? "#10b981" : m.score >= 60 ? "#fbbf24" : "#f87171";
-                            const efCor = m.efLabel === "acima" ? "#10b981" : m.efLabel === "abaixo" ? "#f87171" : "#fbbf24";
-                            const efIcon = m.efLabel === "acima" ? "▲" : m.efLabel === "abaixo" ? "▼" : "=";
+                            const cor = m.pct >= 5 ? "#10b981" : m.pct >= -5 ? "#fbbf24" : "#f87171";
+                            const pctFmt = (m.pct >= 0 ? "+" : "") + m.pct.toFixed(1) + "%";
                             return (
                               <div key={i} style={{ padding: "11px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
                                   <div style={{ width: 22, height: 22, borderRadius: "50%", background: cor+"20", border:`1px solid ${cor}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: cor, flexShrink: 0 }}>{i+1}</div>
                                   <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.nome}</div>
-                                    {m.multiTipo
-                                      ? <div style={{ fontSize: 10, color: "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.tiposResumo}</div>
-                                      : <div style={{ fontSize: 10, color: "#475569", display: "flex", alignItems: "center", gap: 6 }}>
-                                          {TIPO_ICON[m.tipo]||""} {m.tipo}
-                                          <span style={{ color: efCor, fontWeight: 600 }}>{efIcon} {m.kml} km/L</span>
-                                          <span style={{ color: "#334155" }}>· ref: {m.benchKml}</span>
-                                        </div>
-                                    }
+                                    <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9" }}>{m.nome}</div>
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+                                      {m.entradas.map((e, j) => {
+                                        const eCor = e.pct >= 2 ? "#10b981" : e.pct <= -2 ? "#f87171" : "#fbbf24";
+                                        return (
+                                          <span key={j} style={{ fontSize: 10, padding: "1px 7px", borderRadius: 99, background: eCor+"15", color: eCor, border: `1px solid ${eCor}30` }}>
+                                            {TIPO_ICON[e.tipo]||""} {e.tipo} {e.pct >= 0 ? "+" : ""}{e.pct.toFixed(0)}%
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
-                                  <div style={{ textAlign: "right" }}>
-                                    <div style={{ fontWeight: 700, fontSize: 14, color: cor }}>{m.score}<span style={{ fontSize: 9, color: "#475569" }}>/100</span></div>
-                                    {m.multiTipo && <div style={{ fontSize: 9, color: "#64748b", marginTop: 1 }}>ponderado</div>}
+                                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                    <div style={{ fontWeight: 800, fontSize: 16, color: cor }}>{pctFmt}</div>
+                                    <div style={{ fontSize: 9, color: "#475569" }}>{m.viagens} viagens</div>
                                   </div>
                                 </div>
-                                <div style={{ height: 3, background: "#1e293b", borderRadius: 99 }}>
-                                  <div style={{ height: "100%", width: `${m.score}%`, background: cor, borderRadius: 99 }} />
+                                <div style={{ height: 4, background: "#1e293b", borderRadius: 99, overflow: "hidden" }}>
+                                  <div style={{ height: "100%", width: `${Math.min(100, Math.max(0, 50 + m.pct))}%`, background: cor, borderRadius: 99 }} />
                                 </div>
                               </div>
                             );
