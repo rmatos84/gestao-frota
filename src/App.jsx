@@ -30,6 +30,12 @@ const PERMISSOES = {
   },
 };
 
+// Resolve nome atual do motorista pelo id
+const getNome = (motoristas, id, fallback) => {
+  const m = motoristas.find(m => m.id === id);
+  return m?.nome || fallback || "—";
+};
+
 const MENU_GRUPOS = [
   { grupo: "Logística", icone: "🚚", modulos: [
     { id: "dashboard",   label: "Dashboard",      icone: "📊", desc: "KM rodados, consumo, rankings e alertas da frota" },
@@ -683,7 +689,7 @@ function ChecklistHistorico({ checklists, motoristas, veiculos, ckFiltroMot, set
                     <React.Fragment key={c.id}>
                       <tr style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
                         <td style={{ padding:"11px 14px", color:"#94a3b8", whiteSpace:"nowrap" }}>{c.data}</td>
-                        <td style={{ padding:"11px 14px", fontWeight:600, color:"#f1f5f9" }}>{nomeMotorista(c.motorista_id, c.motorista_nome)}</td>
+                        <td style={{ padding:"11px 14px", fontWeight:600, color:"#f1f5f9" }}>{getNome(motoristas, c.motorista_id, c.motorista_nome)}</td>
                         <td style={{ padding:"11px 14px", color:"#94a3b8" }}>{c.veiculo_descricao}</td>
                         <td style={{ padding:"11px 14px" }}>
                           <span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, background:`${TIPO_COLOR[c.tipo_veiculo]||"#334155"}20`, color:TIPO_COLOR[c.tipo_veiculo]||"#64748b", border:`1px solid ${TIPO_COLOR[c.tipo_veiculo]||"#334155"}40` }}>
@@ -773,7 +779,7 @@ function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, o
   // Impacto na meta por motorista no período filtrado
   const impactoMeta = {};
   ocFiltradas.forEach(o => {
-    const nome = nomeMotorista(o.motorista_id, o.motorista_nome);
+    const nome = getNome(motoristas, o.motorista_id, o.motorista_nome);
     if (!impactoMeta[nome]) impactoMeta[nome] = { nome, id: o.motorista_id, totalPenalidade: 0, ocorrencias: [] };
     impactoMeta[nome].totalPenalidade = Math.min(100, impactoMeta[nome].totalPenalidade + (o.penalidade || 0));
     impactoMeta[nome].ocorrencias.push(o);
@@ -943,7 +949,7 @@ function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, o
                 return (
                   <tr key={oc.id} style={{ borderTop: "1px solid #1e293b", background: i % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)" }}>
                     <td style={{ padding: "12px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{oc.data}</td>
-                    <td style={{ padding: "12px 16px", fontWeight: 600, color: "#f1f5f9" }}>{nomeMotorista(oc.motorista_id, oc.motorista_nome)}</td>
+                    <td style={{ padding: "12px 16px", fontWeight: 600, color: "#f1f5f9" }}>{getNome(motoristas, oc.motorista_id, oc.motorista_nome)}</td>
                     <td style={{ padding: "12px 16px", color: "#e2e8f0" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         {tipo?.icone || "📝"} {tipo?.label || oc.tipo}
@@ -1553,12 +1559,6 @@ export default function App() {
   const veiculosFiltradosTipo = veiculos.filter(v => !ckTipo || v.tipo === ckTipo);
   const itensChecklist = ckTipo === "Moto" ? ITENS_MOTO : ITENS_CARRO;
 
-  // Resolve sempre o nome atual do motorista pelo id (ignora nome salvo no registro)
-  const nomeMotorista = (id, fallback) => {
-    const m = motoristas.find(m => m.id === id);
-    return m?.nome || fallback || id || "—";
-  };
-
   const abastFiltrados = useMemo(() => {
     return abastecimentos.filter(r => {
       if (filtroDataInicio && r.data < filtroDataInicio) return false;
@@ -1581,7 +1581,7 @@ export default function App() {
   const stats = useMemo(() => {
     const por = {};
     abastFiltrados.forEach(r => {
-      const nome = nomeMotorista(r.motorista_id, r.motorista_nome);
+      const nome = getNome(motoristas, r.motorista_id, r.motorista_nome);
       const km = r.km_final - r.km_inicial;
       if (!por[nome]) por[nome] = { km: 0, litros: 0, viagens: 0, gasto: 0 };
       por[nome].km += km; por[nome].litros += parseFloat(r.combustivel_litros);
@@ -1617,7 +1617,7 @@ export default function App() {
     abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo || "Sem tipo";
-      const nome = nomeMotorista(r.motorista_id, r.motorista_nome);
+      const nome = getNome(motoristas, r.motorista_id, r.motorista_nome);
       const km = r.km_final - r.km_inicial;
       if (!tiposMap[tipo]) tiposMap[tipo] = {};
       if (!tiposMap[tipo][nome]) tiposMap[tipo][nome] = { km: 0, litros: 0, viagens: 0, gasto: 0 };
@@ -1658,7 +1658,7 @@ export default function App() {
     abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo || "Sem tipo";
-      const nome = nomeMotorista(r.motorista_id, r.motorista_nome);
+      const nome = getNome(motoristas, r.motorista_id, r.motorista_nome);
       const key = nome + "||" + tipo;
       if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, motorista_id: r.motorista_id, km: 0, litros: 0, viagens: 0 };
       porMotTipo[key].km += r.km_final - r.km_inicial;
@@ -1750,7 +1750,7 @@ export default function App() {
     abastecimentos.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo; if (!tipo) return;
-      const nome = nomeMotorista(r.motorista_id, r.motorista_nome);
+      const nome = getNome(motoristas, r.motorista_id, r.motorista_nome);
       const key = nome + "||" + tipo;
       if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, km: 0, litros: 0 };
       porMotTipo[key].km += r.km_final - r.km_inicial;
@@ -2433,7 +2433,7 @@ export default function App() {
               const ocMes = ocorrencias.filter(o => (!mesIni || o.data >= mesIni) && (!mesFim || o.data <= mesFim));
               const penMes = {};
               ocMes.forEach(o => {
-                const nome = nomeMotorista(o.motorista_id, o.motorista_nome);
+                const nome = getNome(motoristas, o.motorista_id, o.motorista_nome);
                 if (!penMes[nome]) penMes[nome] = 0;
                 penMes[nome] = Math.min(100, penMes[nome] + (o.penalidade || 0));
               });
@@ -2455,7 +2455,7 @@ export default function App() {
                             const pen = penMes[m.nome] || 0;
                             const metaRestante = Math.max(0, 100 - pen);
                             const cor = metaRestante === 100 ? "#10b981" : metaRestante >= 50 ? "#fbbf24" : "#f87171";
-                            const ocCount = ocMes.filter(o => (nomeMotorista(o.motorista_id, o.motorista_nome)) === m.nome || o.motorista_id === m.id).length;
+                            const ocCount = ocMes.filter(o => (getNome(motoristas, o.motorista_id, o.motorista_nome)) === m.nome || o.motorista_id === m.id).length;
                             return (
                               <div key={m.id} style={{ padding: "11px 20px", borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 5 }}>
@@ -2661,7 +2661,7 @@ export default function App() {
                         const precoLitro = r.valor_total ? (parseFloat(r.valor_total)/litros).toFixed(2) : null;
                         return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
-                          <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{nomeMotorista(r.motorista_id, r.motorista_nome)}</td>
+                          <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{getNome(motoristas, r.motorista_id, r.motorista_nome)}</td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
