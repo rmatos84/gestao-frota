@@ -1586,6 +1586,24 @@ export default function App() {
   }, [abastFiltrados]);
 
   const rankingPorTipo = useMemo(() => {
+    // Média histórica por tipo — últimos 3 meses (sempre de abastecimentos completos)
+    const tres_meses_atras = new Date();
+    tres_meses_atras.setMonth(tres_meses_atras.getMonth() - 3);
+    const dataLimite = tres_meses_atras.toISOString().split("T")[0];
+    const historicoPorTipo = {};
+    abastecimentos.filter(r => r.data >= dataLimite).forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo; if (!tipo) return;
+      if (!historicoPorTipo[tipo]) historicoPorTipo[tipo] = { km: 0, litros: 0 };
+      historicoPorTipo[tipo].km += r.km_final - r.km_inicial;
+      historicoPorTipo[tipo].litros += parseFloat(r.combustivel_litros || 0);
+    });
+    const mediaHistorica = {};
+    Object.entries(historicoPorTipo).forEach(([tipo, d]) => {
+      mediaHistorica[tipo] = d.litros > 0 ? d.km / d.litros : 0;
+    });
+
+    // Dados do período filtrado
     const tiposMap = {};
     abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
@@ -1598,14 +1616,24 @@ export default function App() {
       tiposMap[tipo][nome].viagens += 1; tiposMap[tipo][nome].gasto += parseFloat(r.valor_total || 0);
     });
     return Object.entries(tiposMap).map(([tipo, motoristasMap]) => {
-      const lista = Object.entries(motoristasMap).map(([nome, d]) => ({
-        nome, kmTotal: d.km, litros: d.litros,
-        kml: d.litros > 0 ? (d.km / d.litros).toFixed(2) : "—",
-        viagens: d.viagens, gasto: d.gasto,
-      })).sort((a, b) => b.kmTotal - a.kmTotal);
-      return { tipo, motoristas: lista, totalKm: lista.reduce((s, m) => s + m.kmTotal, 0) };
+      const media = mediaHistorica[tipo] || 0;
+      const lista = Object.entries(motoristasMap).map(([nome, d]) => {
+        const kmlN = d.litros > 0 ? d.km / d.litros : 0;
+        // Cor baseada na média histórica dos últimos 3 meses
+        let eficiencia = "media";
+        if (media > 0) {
+          if (kmlN >= media * 1.05) eficiencia = "acima";
+          else if (kmlN < media * 0.95) eficiencia = "abaixo";
+        }
+        return {
+          nome, kmTotal: d.km, litros: d.litros,
+          kml: d.litros > 0 ? kmlN.toFixed(2) : "—",
+          kmlN, viagens: d.viagens, gasto: d.gasto, eficiencia,
+        };
+      }).sort((a, b) => b.kmTotal - a.kmTotal);
+      return { tipo, motoristas: lista, totalKm: lista.reduce((s, m) => s + m.kmTotal, 0), mediaKml: media };
     }).sort((a, b) => ["Moto","Carro","Van","Caminhão"].indexOf(a.tipo) - ["Moto","Carro","Van","Caminhão"].indexOf(b.tipo));
-  }, [abastFiltrados, veiculos]);
+  }, [abastFiltrados, abastecimentos, veiculos]);
 
   const totalKm = abastFiltrados.reduce((s, r) => s + (r.km_final - r.km_inicial), 0);
   const totalLitros = abastFiltrados.reduce((s, r) => s + parseFloat(r.combustivel_litros || 0), 0);
@@ -2306,26 +2334,50 @@ export default function App() {
                 <div style={{ marginBottom: 8 }}>
                   <div style={{ fontWeight:600, fontSize:15, color:"#f1f5f9", marginBottom:14 }}>📊 Ranking por Tipo de Veículo</div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(340px,1fr))", gap:16 }}>
-                    {rankingPorTipo.map(({ tipo, motoristas: lista, totalKm: totalKmTipo }) => {
+                    {rankingPorTipo.map(({ tipo, motoristas: lista, totalKm: totalKmTipo, mediaKml }) => {
                       const cor = TIPO_COLOR[tipo] || "#64748b";
+                      const mediaTxt = mediaKml > 0 ? mediaKml.toFixed(2) : null;
                       return <div key={tipo} style={{ background:"#0f172a", border:`1px solid ${cor}30`, borderRadius:16, overflow:"hidden" }}>
                         <div style={{ padding:"14px 20px", borderBottom:"1px solid #1e293b", display:"flex", alignItems:"center", justifyContent:"space-between", background:`${cor}10` }}>
                           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                             <div style={{ width:34, height:34, borderRadius:10, background:`${cor}20`, border:`1px solid ${cor}40`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{TIPO_ICON[tipo]||"🚘"}</div>
-                            <div><div style={{ fontWeight:700, fontSize:14, color:"#f1f5f9" }}>{tipo}</div><div style={{ fontSize:11, color:"#64748b" }}>{lista.length} motorista{lista.length>1?"s":""}</div></div>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:14, color:"#f1f5f9" }}>{tipo}</div>
+                              <div style={{ fontSize:11, color:"#64748b" }}>{lista.length} motorista{lista.length>1?"s":""}</div>
+                            </div>
                           </div>
-                          <div style={{ textAlign:"right" }}><div style={{ fontSize:13, fontWeight:700, color:cor }}>{totalKmTipo.toLocaleString()} km</div><div style={{ fontSize:10, color:"#64748b" }}>total rodado</div></div>
+                          <div style={{ textAlign:"right" }}>
+                            <div style={{ fontSize:13, fontWeight:700, color:cor }}>{totalKmTipo.toLocaleString()} km</div>
+                            {mediaTxt && (
+                              <div style={{ fontSize:10, color:"#64748b", marginTop:2 }}>
+                                média 3m: <span style={{ color:"#fbbf24", fontWeight:600 }}>{mediaTxt} km/L</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         {lista.map((m,i) => {
-                          const kmlN = parseFloat(m.kml);
                           const pct = lista[0].kmTotal > 0 ? (m.kmTotal/lista[0].kmTotal)*100 : 0;
+                          const kmlCor = m.eficiencia === "acima" ? "#10b981" : m.eficiencia === "abaixo" ? "#f87171" : "#fbbf24";
+                          const kmlBg = m.eficiencia === "acima" ? "rgba(16,185,129,0.1)" : m.eficiencia === "abaixo" ? "rgba(248,113,113,0.1)" : "rgba(251,191,36,0.1)";
+                          const kmlBorder = m.eficiencia === "acima" ? "rgba(16,185,129,0.25)" : m.eficiencia === "abaixo" ? "rgba(248,113,113,0.25)" : "rgba(251,191,36,0.25)";
+                          const efLabel = m.eficiencia === "acima" ? "▲" : m.eficiencia === "abaixo" ? "▼" : "=";
                           return <div key={m.nome} style={{ padding:"12px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
                             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
                               <div style={{ width:22, height:22, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, flexShrink:0, background:i===0?"linear-gradient(135deg,#fbbf24,#f59e0b)":i===1?"linear-gradient(135deg,#94a3b8,#64748b)":i===2?"linear-gradient(135deg,#b45309,#92400e)":"#1e293b", color:"#fff" }}>{i+1}</div>
-                              <div style={{ flex:1, minWidth:0 }}><div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.nome}</div><div style={{ fontSize:10, color:"#475569" }}>{m.viagens} viagem{m.viagens>1?"s":""} · {m.litros.toFixed(0)}L</div></div>
-                              <div style={{ textAlign:"right", flexShrink:0 }}><div style={{ fontSize:13, fontWeight:700, color:"#e2e8f0" }}>{m.kmTotal.toLocaleString()} km</div><div style={{ fontSize:11, fontWeight:600, color:!isNaN(kmlN)?(kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171"):"#64748b" }}>{m.kml} km/L</div></div>
+                              <div style={{ flex:1, minWidth:0 }}>
+                                <div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{m.nome}</div>
+                                <div style={{ fontSize:10, color:"#475569" }}>{m.viagens} viagem{m.viagens>1?"s":""} · {m.litros.toFixed(0)}L</div>
+                              </div>
+                              <div style={{ textAlign:"right", flexShrink:0 }}>
+                                <div style={{ fontSize:13, fontWeight:700, color:"#e2e8f0" }}>{m.kmTotal.toLocaleString()} km</div>
+                                <div style={{ marginTop:3 }}>
+                                  <span style={{ fontSize:11, fontWeight:700, color:kmlCor, background:kmlBg, border:`1px solid ${kmlBorder}`, borderRadius:99, padding:"1px 8px" }}>
+                                    {efLabel} {m.kml} km/L
+                                  </span>
+                                </div>
+                              </div>
                             </div>
-                            <div style={{ height:3, background:"#1e293b", borderRadius:99 }}><div style={{ height:"100%", width:`${pct}%`, background:cor, borderRadius:99, opacity:0.8 }} /></div>
+                            <div style={{ height:3, background:"#1e293b", borderRadius:99 }}><div style={{ height:"100%", width:`${pct}%`, background:kmlCor, borderRadius:99, opacity:0.7 }} /></div>
                           </div>;
                         })}
                       </div>;
