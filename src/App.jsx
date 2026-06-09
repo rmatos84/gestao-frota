@@ -36,6 +36,14 @@ const getNome = (motoristas, id, fallback) => {
   return m?.nome || fallback || "—";
 };
 
+// Formata data ISO (2026-06-05) para padrão BR (05/06/2026)
+const fmtData = (data) => {
+  if (!data) return "—";
+  const [y, m, d] = data.split("-");
+  if (!y || !m || !d) return data;
+  return `${d}/${m}/${y}`;
+};
+
 const MENU_GRUPOS = [
   { grupo: "Logística", icone: "🚚", modulos: [
     { id: "dashboard",   label: "Dashboard",      icone: "📊", desc: "KM rodados, consumo, rankings e alertas da frota" },
@@ -418,7 +426,7 @@ function PlanejamentoProducaoTab({ planejamentos, produtosProducao, onSave, onUp
           {diasDisponiveis.slice(0, 7).map(d => (
             <button key={d} onClick={() => setFiltroData(d)}
               style={{ padding: "5px 10px", borderRadius: 8, border: `1px solid ${d === filtroData ? "#10b981" : "#334155"}`, background: d === filtroData ? "rgba(16,185,129,0.15)" : "#1e293b", color: d === filtroData ? "#10b981" : "#64748b", fontSize: 11, cursor: "pointer" }}>
-              {new Date(d + "T12:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+              {fmtData(d)}
             </button>
           ))}
         </div>
@@ -688,7 +696,7 @@ function ChecklistHistorico({ checklists, motoristas, veiculos, ckFiltroMot, set
                   return (
                     <React.Fragment key={c.id}>
                       <tr style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
-                        <td style={{ padding:"11px 14px", color:"#94a3b8", whiteSpace:"nowrap" }}>{c.data}</td>
+                        <td style={{ padding:"11px 14px", color:"#94a3b8", whiteSpace:"nowrap" }}>{fmtData(c.data)}</td>
                         <td style={{ padding:"11px 14px", fontWeight:600, color:"#f1f5f9" }}>{getNome(motoristas, c.motorista_id, c.motorista_nome)}</td>
                         <td style={{ padding:"11px 14px", color:"#94a3b8" }}>{c.veiculo_descricao}</td>
                         <td style={{ padding:"11px 14px" }}>
@@ -915,7 +923,7 @@ function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, o
                         <div key={j} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, padding: "6px 8px", background: "#0a0f1a", borderRadius: 7 }}>
                           <span>{tipo?.icone || "📝"}</span>
                           <span style={{ flex: 1, color: "#94a3b8" }}>{tipo?.label || oc.tipo}</span>
-                          <span style={{ color: "#64748b" }}>{oc.data}</span>
+                          <span style={{ color: "#64748b" }}>{fmtData(oc.data)}</span>
                           {oc.penalidade > 0 && <span style={{ color: "#f87171", fontWeight: 700 }}>−{oc.penalidade}%</span>}
                         </div>
                       );
@@ -948,7 +956,7 @@ function OcorrenciasTab({ motoristas, ocorrencias, abastecimentos, checklists, o
                 const tipo = TIPOS_OCORRENCIA.find(t => t.id === oc.tipo);
                 return (
                   <tr key={oc.id} style={{ borderTop: "1px solid #1e293b", background: i % 2 === 0 ? "transparent" : "rgba(30,41,59,0.3)" }}>
-                    <td style={{ padding: "12px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{oc.data}</td>
+                    <td style={{ padding: "12px 16px", color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtData(oc.data)}</td>
                     <td style={{ padding: "12px 16px", fontWeight: 600, color: "#f1f5f9" }}>{getNome(motoristas, oc.motorista_id, oc.motorista_nome)}</td>
                     <td style={{ padding: "12px 16px", color: "#e2e8f0" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -1763,7 +1771,7 @@ export default function App() {
         const diff = (((kmlMot / bench) - 1) * 100).toFixed(0);
         const datasOrd = [...datas].sort();
         const periodo = datasOrd.length > 1 ? `${datasOrd[0]} a ${datasOrd[datasOrd.length-1]}` : datasOrd[0];
-        lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `${kmlMot.toFixed(2)} km/L em ${tipo} — ${diff}% abaixo da média (${bench.toFixed(2)} km/L)`, detalhe: `Período: ${periodo}`, tag: tipo });
+        lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `${kmlMot.toFixed(2)} km/L em ${tipo} — ${diff}% abaixo da média (${bench.toFixed(2)} km/L)`, detalhe: `Período: ${periodo.split(" a ").map(d => fmtData(d)).join(" a ")}`, tag: tipo });
       }
     });
 
@@ -1780,7 +1788,7 @@ export default function App() {
         const precoAtual = parseFloat(r.valor_total) / parseFloat(r.combustivel_litros);
         const variacao = ((precoAtual / media) - 1) * 100;
         if (variacao > 15) {
-          lista.push({ tipo: "warning", icone: "💰", titulo: `Custo elevado — ${tipo}`, msg: `R$ ${precoAtual.toFixed(2)}/L em ${r.veiculo_descricao?.split(" - ")[0] || ""} (+${variacao.toFixed(0)}% vs média R$ ${media.toFixed(2)}/L)`, detalhe: `Data: ${r.data} · ${getNome(motoristas, r.motorista_id, r.motorista_nome)}`, tag: tipo });
+          lista.push({ tipo: "warning", icone: "💰", titulo: `Custo elevado — ${tipo}`, msg: `R$ ${precoAtual.toFixed(2)}/L em ${r.veiculo_descricao?.split(" - ")[0] || ""} (+${variacao.toFixed(0)}% vs média R$ ${media.toFixed(2)}/L)`, detalhe: `Data: ${fmtData(r.data)} · ${getNome(motoristas, r.motorista_id, r.motorista_nome)}`, tag: tipo });
         }
       });
     });
@@ -1806,7 +1814,7 @@ export default function App() {
           const itensRef = [...ITENS_CARRO, ...ITENS_MOTO];
           const itemLabel = itensRef.find(x => x.id === itemId)?.label || itemId;
           const ultimoCk = cksVei[0];
-          lista.push({ tipo: "danger", icone: "🔧", titulo: `${vei.modelo} - ${vei.placa}`, msg: `"${itemLabel}" reprovado ${seguidas}x seguidas`, detalhe: `Último checklist: ${ultimoCk?.data || "—"} · ${ultimoCk?.motorista_nome || "—"}`, tag: vei.tipo });
+          lista.push({ tipo: "danger", icone: "🔧", titulo: `${vei.modelo} - ${vei.placa}`, msg: `"${itemLabel}" reprovado ${seguidas}x seguidas`, detalhe: `Último checklist: ${fmtData(ultimoCk?.data)} · ${ultimoCk?.motorista_nome || "—"}`, tag: vei.tipo });
         }
       });
     });
@@ -2651,7 +2659,7 @@ export default function App() {
                         const kmlN = parseFloat(kml);
                         const precoLitro = r.valor_total ? (parseFloat(r.valor_total)/litros).toFixed(2) : null;
                         return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
-                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.data}</td>
+                          <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{fmtData(r.data)}</td>
                           <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{getNome(motoristas, r.motorista_id, r.motorista_nome)}</td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
@@ -2879,7 +2887,7 @@ export default function App() {
               <div style={{ flex:1 }}>
                 <div style={{ fontWeight:700, fontSize:16, color:"#f1f5f9" }}>{ckDetalhes.veiculo_descricao}</div>
                 <div style={{ fontSize:12, color:"#475569", marginTop:2 }}>
-                  {ckDetalhes.motorista_nome} · {ckDetalhes.data}{ckDetalhes.km ? ` · ${parseFloat(ckDetalhes.km).toLocaleString()} km` : ""}
+                  {ckDetalhes.motorista_nome} · {fmtData(ckDetalhes.data)}{ckDetalhes.km ? ` · ${parseFloat(ckDetalhes.km).toLocaleString()} km` : ""}
                 </div>
               </div>
               {(() => {
