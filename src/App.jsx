@@ -1491,6 +1491,7 @@ export default function App() {
   const [ckExpanded, setCkExpanded] = useState(null);
   const [ckDetalhes, setCkDetalhes] = useState(null);
   const [showRankingInfo, setShowRankingInfo] = useState(false);
+  const [showAlertas, setShowAlertas] = useState(false);
   const [tab, setTab] = useState("home");
   const [abastPage, setAbastPage] = useState(0);
   const ABAST_PER_PAGE = 50;
@@ -1745,21 +1746,24 @@ export default function App() {
 
     // 1. Alerta: km/L do motorista abaixo de 80% da média do tipo
     const porMotTipo = {};
-    abastecimentos.forEach(r => {
+    abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
       const tipo = vei?.tipo; if (!tipo) return;
       const nome = getNome(motoristas, r.motorista_id, r.motorista_nome);
       const key = nome + "||" + tipo;
-      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, km: 0, litros: 0 };
+      if (!porMotTipo[key]) porMotTipo[key] = { nome, tipo, km: 0, litros: 0, datas: [] };
       porMotTipo[key].km += r.km_final - r.km_inicial;
       porMotTipo[key].litros += parseFloat(r.combustivel_litros || 0);
+      porMotTipo[key].datas.push(r.data);
     });
-    Object.values(porMotTipo).forEach(({ nome, tipo, km, litros }) => {
+    Object.values(porMotTipo).forEach(({ nome, tipo, km, litros, datas }) => {
       const kmlMot = litros > 0 ? km / litros : 0;
       const bench = mediaTipo[tipo]?.kml || 0;
       if (bench > 0 && kmlMot < bench * 0.8) {
         const diff = (((kmlMot / bench) - 1) * 100).toFixed(0);
-        lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `${kmlMot.toFixed(2)} km/L em ${tipo} — ${diff}% abaixo da média (${bench.toFixed(2)} km/L)`, tag: tipo });
+        const datasOrd = [...datas].sort();
+        const periodo = datasOrd.length > 1 ? `${datasOrd[0]} a ${datasOrd[datasOrd.length-1]}` : datasOrd[0];
+        lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `${kmlMot.toFixed(2)} km/L em ${tipo} — ${diff}% abaixo da média (${bench.toFixed(2)} km/L)`, detalhe: `Período: ${periodo}`, tag: tipo });
       }
     });
 
@@ -1776,7 +1780,7 @@ export default function App() {
         const precoAtual = parseFloat(r.valor_total) / parseFloat(r.combustivel_litros);
         const variacao = ((precoAtual / media) - 1) * 100;
         if (variacao > 15) {
-          lista.push({ tipo: "warning", icone: "💰", titulo: `Custo elevado — ${tipo}`, msg: `R$ ${precoAtual.toFixed(2)}/L em ${r.veiculo_descricao?.split(" - ")[0] || ""} (+${variacao.toFixed(0)}% vs média R$ ${media.toFixed(2)}/L)`, tag: tipo });
+          lista.push({ tipo: "warning", icone: "💰", titulo: `Custo elevado — ${tipo}`, msg: `R$ ${precoAtual.toFixed(2)}/L em ${r.veiculo_descricao?.split(" - ")[0] || ""} (+${variacao.toFixed(0)}% vs média R$ ${media.toFixed(2)}/L)`, detalhe: `Data: ${r.data} · ${getNome(motoristas, r.motorista_id, r.motorista_nome)}`, tag: tipo });
         }
       });
     });
@@ -1801,7 +1805,8 @@ export default function App() {
         if (seguidas >= 3) {
           const itensRef = [...ITENS_CARRO, ...ITENS_MOTO];
           const itemLabel = itensRef.find(x => x.id === itemId)?.label || itemId;
-          lista.push({ tipo: "danger", icone: "🔧", titulo: `${vei.modelo} - ${vei.placa}`, msg: `"${itemLabel}" reprovado ${seguidas}x seguidas`, tag: vei.tipo });
+          const ultimoCk = cksVei[0];
+          lista.push({ tipo: "danger", icone: "🔧", titulo: `${vei.modelo} - ${vei.placa}`, msg: `"${itemLabel}" reprovado ${seguidas}x seguidas`, detalhe: `Último checklist: ${ultimoCk?.data || "—"} · ${ultimoCk?.motorista_nome || "—"}`, tag: vei.tipo });
         }
       });
     });
@@ -2287,29 +2292,16 @@ export default function App() {
         {!loading && tab === "dashboard" && acesso("dashboard") && (
           <div>
 
-            {/* ───── ALERTAS ───── */}
+            {/* ───── ALERTAS BELL ───── */}
             {alertas.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: "#f1f5f9", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
-                  🚨 Alertas
-                  <span style={{ fontSize: 11, background: "rgba(248,113,113,0.2)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 99, padding: "2px 8px", fontWeight: 700 }}>{alertas.length}</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 10 }}>
-                  {alertas.map((a, i) => {
-                    const colors = { danger: { bg: "rgba(248,113,113,0.08)", border: "rgba(248,113,113,0.25)", text: "#f87171", badge: "#1e293b" }, warning: { bg: "rgba(251,191,36,0.08)", border: "rgba(251,191,36,0.25)", text: "#fbbf24", badge: "#1e293b" }, info: { bg: "rgba(99,102,241,0.08)", border: "rgba(99,102,241,0.25)", text: "#818cf8", badge: "#1e293b" } };
-                    const c = colors[a.tipo] || colors.info;
-                    return (
-                      <div key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 12, padding: "12px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
-                        <span style={{ fontSize: 20, flexShrink: 0, marginTop: 1 }}>{a.icone}</span>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.titulo}</div>
-                          <div style={{ fontSize: 12, color: "#94a3b8" }}>{a.msg}</div>
-                        </div>
-                        {a.tag && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.05)", border: "1px solid #334155", borderRadius: 99, padding: "2px 8px", color: "#64748b", whiteSpace: "nowrap", flexShrink: 0 }}>{a.tag}</span>}
-                      </div>
-                    );
-                  })}
-                </div>
+              <div style={{ marginBottom: 16 }}>
+                <button onClick={() => setShowAlertas(true)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 12, padding: "10px 16px", cursor: "pointer", width: "100%" }}>
+                  <span style={{ fontSize: 20 }}>🚨</span>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: "#f1f5f9", flex: 1, textAlign: "left" }}>Alertas do período</span>
+                  <span style={{ fontSize: 12, background: "rgba(248,113,113,0.2)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 99, padding: "2px 10px", fontWeight: 700 }}>{alertas.length}</span>
+                  <span style={{ fontSize: 12, color: "#475569" }}>Ver todos →</span>
+                </button>
               </div>
             )}
 
@@ -2339,7 +2331,7 @@ export default function App() {
             {stats.length === 0
               ? <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:40, textAlign:"center", color:"#475569" }}>Nenhum registro encontrado.</div>
               : <>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:16 }}>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(300px,1fr))", gap:16, marginBottom:16 }}>
                   <div style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:20 }}>
                     <div style={{ fontWeight:600, fontSize:14, color:"#f1f5f9", marginBottom:16 }}>🥧 KM por Motorista</div>
                     <ResponsiveContainer width="100%" height={240}>
@@ -2439,7 +2431,7 @@ export default function App() {
               const sortedMeta = [...motAtivos].sort((a, b) => (penMes[a.nome]||0) - (penMes[b.nome]||0));
               const scoreAtivos = scoreMotoristas.filter(m => { const mot = motoristas.find(x => x.nome === m.nome); return !mot || mot.ativo !== false; });
               return (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 20 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(300px,1fr))", gap: 16, marginTop: 20 }}>
                   {/* Resultados do Mês */}
                   <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, overflow: "hidden" }}>
                     <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", gap: 8 }}>
@@ -3001,7 +2993,51 @@ export default function App() {
         </div>
       )}
 
-            {/* MODAL INFO RANKING EFICIÊNCIA */}
+            {/* MODAL ALERTAS */}
+      {showAlertas && (
+        <div onClick={() => setShowAlertas(false)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 20, width: "100%", maxWidth: 600, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "18px 24px", borderBottom: "1px solid #1e293b", display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🚨</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#f1f5f9" }}>Alertas do Período</div>
+                <div style={{ fontSize: 11, color: "#475569" }}>{alertas.length} alerta{alertas.length !== 1 ? "s" : ""} identificados</div>
+              </div>
+              <button onClick={() => setShowAlertas(false)}
+                style={{ background: "#1e293b", border: "1px solid #334155", color: "#94a3b8", borderRadius: 8, padding: "6px 10px", fontSize: 16, cursor: "pointer" }}>✕</button>
+            </div>
+            <div style={{ overflowY: "auto", padding: "16px 24px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {alertas.map((a, i) => {
+                const colors = {
+                  danger:  { bg: "rgba(248,113,113,0.08)",  border: "rgba(248,113,113,0.25)",  text: "#f87171" },
+                  warning: { bg: "rgba(251,191,36,0.08)",   border: "rgba(251,191,36,0.25)",   text: "#fbbf24" },
+                  info:    { bg: "rgba(99,102,241,0.08)",   border: "rgba(99,102,241,0.25)",   text: "#818cf8" },
+                };
+                const c = colors[a.tipo] || colors.info;
+                return (
+                  <div key={i} style={{ background: c.bg, border: `1px solid ${c.border}`, borderRadius: 12, padding: "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>{a.icone}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: "#f1f5f9" }}>{a.titulo}</span>
+                          {a.tag && <span style={{ fontSize: 10, background: "rgba(255,255,255,0.05)", border: "1px solid #334155", borderRadius: 99, padding: "1px 7px", color: "#64748b" }}>{a.tag}</span>}
+                        </div>
+                        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: a.detalhe ? 6 : 0 }}>{a.msg}</div>
+                        {a.detalhe && <div style={{ fontSize: 11, color: "#475569", fontStyle: "italic" }}>📅 {a.detalhe}</div>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL INFO RANKING EFICIÊNCIA */}
       {showRankingInfo && (
         <div onClick={() => setShowRankingInfo(false)}
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
