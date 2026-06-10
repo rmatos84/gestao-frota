@@ -174,7 +174,7 @@ const ITENS_MOTO = [
 
 const emptyMotorista = { nome: "", cnh: "", telefone: "", ativo: true };
 const emptyVeiculo = { placa: "", modelo: "", ano: "", tipo: "" };
-const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "" };
+const emptyAbast = { motorista_id: "", veiculo_id: "", motorista_nome: "", veiculo_descricao: "", data: "", km_inicial: "", km_final: "", combustivel_litros: "", valor_total: "", observacao: "", ajudante_id: "", ajudante_nome: "" };
 
 
 
@@ -1589,18 +1589,27 @@ export default function App() {
   const stats = useMemo(() => {
     const por = {};
     abastFiltrados.forEach(r => {
+      // Motorista principal
       const nome = getNome(motoristas, r.motorista_id, r.motorista_nome);
       const km = r.km_final - r.km_inicial;
-      if (!por[nome]) por[nome] = { km: 0, litros: 0, viagens: 0, gasto: 0 };
+      if (!por[nome]) por[nome] = { km: 0, litros: 0, viagens: 0, gasto: 0, soAjudante: false };
       por[nome].km += km; por[nome].litros += parseFloat(r.combustivel_litros);
       por[nome].viagens += 1; por[nome].gasto += parseFloat(r.valor_total || 0);
+      // Ajudante: soma km rodado mas não litros/gasto
+      if (r.ajudante_id) {
+        const nomeAj = getNome(motoristas, r.ajudante_id, r.ajudante_nome);
+        if (!por[nomeAj]) por[nomeAj] = { km: 0, litros: 0, viagens: 0, gasto: 0, soAjudante: true };
+        por[nomeAj].km += km;
+        por[nomeAj].viagens += 1;
+        if (por[nomeAj].soAjudante !== false) por[nomeAj].soAjudante = true;
+      }
     });
     return Object.entries(por).map(([nome, d]) => ({
       nome, kmTotal: d.km, litros: d.litros,
       kml: d.litros > 0 ? (d.km / d.litros).toFixed(2) : "—",
-      viagens: d.viagens, gasto: d.gasto,
+      viagens: d.viagens, gasto: d.gasto, soAjudante: d.soAjudante || false,
     })).sort((a, b) => b.kmTotal - a.kmTotal);
-  }, [abastFiltrados]);
+  }, [abastFiltrados, motoristas]);
 
   const rankingPorTipo = useMemo(() => {
     // Média histórica por tipo — últimos 3 meses (sempre de abastecimentos completos)
@@ -1854,7 +1863,8 @@ export default function App() {
     try {
       const mot = motoristas.find(m => m.id === motorista_id);
       const vei = veiculos.find(v => v.id === veiculo_id);
-      await api("abastecimentos", "POST", { ...formAbast, motorista_nome: mot?.nome || "", veiculo_descricao: `${vei?.modelo || ""} - ${vei?.placa || ""}`, km_inicial: parseFloat(km_inicial), km_final: parseFloat(km_final), combustivel_litros: parseFloat(combustivel_litros), valor_total: formAbast.valor_total ? parseFloat(formAbast.valor_total) : null });
+      const ajudanteAbast = motoristas.find(m => m.id === formAbast.ajudante_id);
+      await api("abastecimentos", "POST", { ...formAbast, motorista_nome: mot?.nome || "", veiculo_descricao: `${vei?.modelo || ""} - ${vei?.placa || ""}`, km_inicial: parseFloat(km_inicial), km_final: parseFloat(km_final), combustivel_litros: parseFloat(combustivel_litros), valor_total: formAbast.valor_total ? parseFloat(formAbast.valor_total) : null, ajudante_id: formAbast.ajudante_id || null, ajudante_nome: ajudanteAbast?.nome || null });
       setFormAbast(emptyAbast); setShowAbastForm(false); await loadAll();
     } catch (e) { setError(e.message); } setSaving(false);
   };
@@ -2366,7 +2376,13 @@ export default function App() {
                         return <div key={s.nome} style={{ padding:"12px 20px", borderTop:i>0?"1px solid #1e293b":"none" }}>
                           <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:7 }}>
                             <div style={{ width:24, height:24, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, flexShrink:0, background:i===0?"linear-gradient(135deg,#fbbf24,#f59e0b)":i===1?"linear-gradient(135deg,#94a3b8,#64748b)":i===2?"linear-gradient(135deg,#b45309,#92400e)":"#1e293b", color:"#fff" }}>{i+1}</div>
-                            <div style={{ flex:1 }}><div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9" }}>{s.nome}</div><div style={{ fontSize:10, color:"#475569" }}>{s.viagens} viagem{s.viagens>1?"s":""} · {s.litros.toFixed(0)}L</div></div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontWeight:600, fontSize:13, color:"#f1f5f9", display:"flex", alignItems:"center", gap:6 }}>
+                                {s.nome}
+                                {s.soAjudante && <span style={{ fontSize:9, color:"#64748b", background:"#1e293b", border:"1px solid #334155", borderRadius:99, padding:"1px 6px" }}>ajudante</span>}
+                              </div>
+                              <div style={{ fontSize:10, color:"#475569" }}>{s.viagens} viagem{s.viagens>1?"s":""}{!s.soAjudante ? ` · ${s.litros.toFixed(0)}L` : " (km rodado)"}</div>
+                            </div>
                             <div style={{ textAlign:"right" }}><div style={{ fontSize:13, fontWeight:700, color:"#e2e8f0" }}>{s.kmTotal.toLocaleString()} km</div><div style={{ fontSize:11, fontWeight:600, color:!isNaN(kmlN)?(kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171"):"#64748b" }}>{s.kml} km/L</div></div>
                           </div>
                           <div style={{ height:4, background:"#1e293b", borderRadius:99 }}><div style={{ height:"100%", width:`${pct}%`, background:COLORS[i%COLORS.length], borderRadius:99 }} /></div>
@@ -2617,6 +2633,14 @@ export default function App() {
                     {[["data","DATA","date",false],["km_inicial","KM INICIAL","number",true],["km_final","KM FINAL","number",true],["combustivel_litros","LITROS","number",false],["valor_total","VALOR TOTAL (R$)","number",false],["observacao","OBSERVAÇÃO","text",false]].map(([f,l,t,intOnly]) => (
                       <div key={f}><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>{l}</label>{inp(formAbast[f], v => setFormAbast(p => ({...p,[f]:v})), l, t, intOnly)}</div>
                     ))}
+                    <div>
+                      <label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>AJUDANTE <span style={{ color:"#334155", fontSize:10 }}>(opcional)</span></label>
+                      <select value={formAbast.ajudante_id} onChange={e => setFormAbast(p => ({...p, ajudante_id: e.target.value}))}
+                        style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:formAbast.ajudante_id?"#f1f5f9":"#64748b", fontSize:13, outline:"none" }}>
+                        <option value="">Nenhum</option>
+                        {motoristas.filter(m => m.ativo !== false && m.id !== formAbast.motorista_id).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                      </select>
+                    </div>
                   </div>
                   <button onClick={saveAbast} disabled={saving} style={{ marginTop:14, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"none", color:"#fff", borderRadius:10, padding:"9px 22px", fontSize:13, fontWeight:600, cursor:"pointer", opacity:saving?0.6:1 }}>{saving?"Salvando...":"Salvar"}</button>
                 </div>
@@ -2685,7 +2709,10 @@ export default function App() {
                         const precoLitro = r.valor_total ? (parseFloat(r.valor_total)/litros).toFixed(2) : null;
                         return <tr key={r.id} style={{ borderTop:"1px solid #1e293b", background:i%2===0?"transparent":"rgba(30,41,59,0.3)" }}>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{fmtData(r.data)}</td>
-                          <td style={{ padding:"10px 14px", fontWeight:600, color:"#f1f5f9" }}>{getNome(motoristas, r.motorista_id, r.motorista_nome)}</td>
+                          <td style={{ padding:"10px 14px" }}>
+                          <div style={{ fontWeight:600, color:"#f1f5f9", fontSize:12 }}>{getNome(motoristas, r.motorista_id, r.motorista_nome)}</div>
+                          {r.ajudante_nome && <div style={{ fontSize:10, color:"#475569" }}>+ {r.ajudante_nome}</div>}
+                        </td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{r.veiculo_descricao}</td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_inicial).toLocaleString()}</td>
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
