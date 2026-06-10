@@ -2535,6 +2535,23 @@ export default function App() {
 
         {/* ABASTECIMENTOS */}
         {!loading && tab === "registros" && acesso("registros") && (() => {
+          // Média histórica km/L por tipo (últimos 3 meses) para colorir a tabela
+          const tresMeses = new Date();
+          tresMeses.setMonth(tresMeses.getMonth() - 3);
+          const dataLimite3m = tresMeses.toISOString().split("T")[0];
+          const mediaPorTipoAbast = {};
+          abastecimentos.filter(r => r.data >= dataLimite3m).forEach(r => {
+            const vei = veiculos.find(v => v.id === r.veiculo_id);
+            const tipo = vei?.tipo; if (!tipo) return;
+            if (!mediaPorTipoAbast[tipo]) mediaPorTipoAbast[tipo] = { km: 0, l: 0 };
+            mediaPorTipoAbast[tipo].km += r.km_final - r.km_inicial;
+            mediaPorTipoAbast[tipo].l += parseFloat(r.combustivel_litros || 0);
+          });
+          Object.keys(mediaPorTipoAbast).forEach(t => {
+            const d = mediaPorTipoAbast[t];
+            mediaPorTipoAbast[t] = d.l > 0 ? d.km / d.l : 0;
+          });
+
           // Filtrar
           const abastVisiveis = abastecimentos.filter(r => {
             if (abastFiltroMotorista && r.motorista_id !== abastFiltroMotorista) return false;
@@ -2674,7 +2691,23 @@ export default function App() {
                           <td style={{ padding:"10px 14px", color:"#94a3b8" }}>{parseFloat(r.km_final).toLocaleString()}</td>
                           <td style={{ padding:"10px 14px", fontWeight:600, color:"#06b6d4" }}>{km.toLocaleString()}</td>
                           <td style={{ padding:"10px 14px", color:"#fbbf24" }}>{litros}L</td>
-                          <td style={{ padding:"10px 14px" }}><span style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:kmlN>=11?"rgba(16,185,129,0.15)":kmlN>=9?"rgba(251,191,36,0.15)":"rgba(248,113,113,0.15)", color:kmlN>=11?"#10b981":kmlN>=9?"#fbbf24":"#f87171" }}>{kml}</span></td>
+                          <td style={{ padding:"10px 14px" }}>
+                          {(() => {
+                            const vei = veiculos.find(v => v.id === r.veiculo_id);
+                            const tipo = vei?.tipo;
+                            const mediaT = mediaPorTipoAbast[tipo];
+                            let cor, bg, label;
+                            if (mediaT && mediaT > 0) {
+                              const ratio = kmlN / mediaT;
+                              if (ratio >= 1.05) { cor = "#10b981"; bg = "rgba(16,185,129,0.15)"; label = "▲"; }
+                              else if (ratio < 0.95) { cor = "#f87171"; bg = "rgba(248,113,113,0.15)"; label = "▼"; }
+                              else { cor = "#fbbf24"; bg = "rgba(251,191,36,0.15)"; label = "="; }
+                            } else {
+                              cor = "#64748b"; bg = "rgba(100,116,139,0.15)"; label = "";
+                            }
+                            return <span title={mediaT ? `Média ${tipo}: ${mediaT.toFixed(2)} km/L` : ""} style={{ fontSize:11, padding:"2px 8px", borderRadius:99, fontWeight:600, background:bg, color:cor }}>{label} {kml}</span>;
+                          })()}
+                        </td>
                           <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro?"R$ "+precoLitro:"—"}</td>
                           <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
                         </tr>;
