@@ -141,7 +141,7 @@ const ITENS_CARRO = [
   { id: "farol", label: "Farol e sinalizadores de direção" },
   { id: "antena", label: "Antena" },
   { id: "documento", label: "Documento atualizado" },
-  { id: "luzes_painel", label: "Luzes do painel apagadas" },
+  { id: "luzes_painel", label: "Ítens do painel está okay" },
   { id: "buzina", label: "Buzina" },
   { id: "tapetes", label: "Tapetes" },
   { id: "chave_roda", label: "Chave de Roda" },
@@ -678,7 +678,7 @@ function ChecklistHistorico({ checklists, motoristas, veiculos, ckFiltroMot, set
               <thead>
                 <tr style={{ background:"#0a0f1a" }}>
                   <SortTh col="data" label="Data" />
-                  <SortTh col="motorista" label="Motorista" />
+                  <SortTh col="motorista" label="Motorista / Ajudante" />
                   <SortTh col="veiculo" label="Veículo" />
                   <SortTh col="tipo" label="Tipo" />
                   <SortTh col="km" label="KM" />
@@ -1460,6 +1460,7 @@ export default function App() {
   const [ckKm, setCkKm] = useState("");
   const [ckItens, setCkItens] = useState({});
   const [ckObs, setCkObs] = useState("");
+  const [ckAjudanteId, setCkAjudanteId] = useState("");
   const [ckSaving, setCkSaving] = useState(false);
   const [ckSuccess, setCkSuccess] = useState(false);
   const [ckView, setCkView] = useState("form"); // "form" | "history"
@@ -1864,17 +1865,20 @@ export default function App() {
     try {
       const mot = motoristas.find(m => m.id === ckMotoristaId);
       const vei = veiculos.find(v => v.id === ckVeiculoId);
+      const ajudante = motoristas.find(m => m.id === ckAjudanteId);
       await api("checklists", "POST", {
         veiculo_id: ckVeiculoId, motorista_id: ckMotoristaId,
         veiculo_descricao: `${vei?.modelo || ""} - ${vei?.placa || ""}`,
         motorista_nome: mot?.nome || "", tipo_veiculo: ckTipo,
         data: ckData, km: ckKm ? parseFloat(ckKm) : null,
         itens: ckItens, observacao: ckObs,
+        ajudante_id: ckAjudanteId || null,
+        ajudante_nome: ajudante?.nome || null,
       });
       setCkSuccess(true);
       setTimeout(() => {
         setCkSuccess(false); setCkTipo(""); setCkVeiculoId(""); setCkMotoristaId("");
-        setCkData(new Date().toISOString().split("T")[0]); setCkKm(""); setCkItens({}); setCkObs("");
+        setCkData(new Date().toISOString().split("T")[0]); setCkKm(""); setCkItens({}); setCkObs(""); setCkAjudanteId("");
         loadAll();
       }, 2000);
     } catch (e) { setError(e.message); }
@@ -2137,6 +2141,10 @@ export default function App() {
                     <div>
                       <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Data</label>
                       {inp(ckData, setCkData, "", "date")}
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>Motorista Ajudante <span style={{ color: "#334155" }}>(opcional)</span></label>
+                      {sel(ckAjudanteId, setCkAjudanteId, <><option value="">Nenhum</option>{motoristas.filter(m => m.ativo !== false && m.id !== ckMotoristaId).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}</>)}
                     </div>
                     <div>
                       <label style={{ fontSize: 10, color: "#64748b", display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.06em" }}>KM do Veículo {ckKm && <span style={{ color: "#475569", fontWeight: 400 }}>(pré-setado)</span>}</label>
