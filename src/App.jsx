@@ -511,94 +511,164 @@ function PlanejamentoProducaoTab({ planejamentos, produtosProducao, onSave, onUp
 }
 
 function CadastroProdutosTab({ produtosProducao, onSave, onUpdate, onDelete }) {
+  const CATEGORIAS = ["Mix de Açaí", "Cremes", "Gelatos", "Potes"];
+  const CAT_COR = { "Mix de Açaí": "#06b6d4", "Cremes": "#10b981", "Gelatos": "#f59e0b", "Potes": "#8b5cf6", "Outros": "#64748b" };
+
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ nome: "", categoria: "" });
+  const [editId, setEditId] = useState(null);
   const [busca, setBusca] = useState("");
   const [filtroCat, setFiltroCat] = useState("");
-
-  const categorias = [...new Set(produtosProducao.map(p => p.categoria).filter(Boolean))].sort();
-  const filtrados = produtosProducao.filter(p =>
-    (!busca || p.nome.toLowerCase().includes(busca.toLowerCase())) &&
-    (!filtroCat || p.categoria === filtroCat)
-  ).sort((a, b) => a.nome.localeCompare(b.nome));
-
-  const handleSave = async () => {
-    if (!form.nome) return;
-    setSaving(true);
-    try { await onSave(form); setForm({ nome: "", categoria: "" }); setShowForm(false); }
-    catch(e) { console.error(e); }
-    setSaving(false);
-  };
+  const [filtroAtivo, setFiltroAtivo] = useState("ativos");
+  const [sortCol, setSortCol] = useState("nome");
+  const [sortDir, setSortDir] = useState("asc");
 
   const inpStyle = { width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "9px 12px", color: "#f1f5f9", fontSize: 13, outline: "none", boxSizing: "border-box" };
 
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+  const Th = ({ col, label }) => (
+    <th onClick={() => handleSort(col)}
+      style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: sortCol === col ? "#06b6d4" : "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", cursor: "pointer", whiteSpace: "nowrap", userSelect: "none", background: "#0f172a", borderBottom: "1px solid #1e293b" }}>
+      {label} {sortCol === col ? (sortDir === "asc" ? "↑" : "↓") : ""}
+    </th>
+  );
+
+  const filtrados = produtosProducao.filter(p => {
+    if (busca && !p.nome.toLowerCase().includes(busca.toLowerCase())) return false;
+    if (filtroCat && p.categoria !== filtroCat) return false;
+    if (filtroAtivo === "ativos" && p.ativo === false) return false;
+    if (filtroAtivo === "inativos" && p.ativo !== false) return false;
+    return true;
+  }).sort((a, b) => {
+    let va = a[sortCol] || "", vb = b[sortCol] || "";
+    return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+  });
+
+  const openNew = () => { setForm({ nome: "", categoria: "" }); setEditId(null); setShowForm(true); };
+  const openEdit = (p) => { setForm({ nome: p.nome, categoria: p.categoria || "" }); setEditId(p.id); setShowForm(true); };
+  const handleSave = async () => {
+    if (!form.nome.trim()) return;
+    setSaving(true);
+    try {
+      if (editId) await onUpdate(editId, { nome: form.nome.trim(), categoria: form.categoria });
+      else await onSave({ nome: form.nome.trim(), categoria: form.categoria, ativo: true });
+      setForm({ nome: "", categoria: "" }); setEditId(null); setShowForm(false);
+    } catch(e) { console.error(e); }
+    setSaving(false);
+  };
+
   return (
     <div>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#10b981,#059669)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📦</div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Cadastro de Produtos</div>
           <div style={{ fontSize: 12, color: "#475569" }}>{produtosProducao.length} produtos cadastrados</div>
         </div>
-        <button onClick={() => setShowForm(!showForm)}
+        <button onClick={showForm ? () => { setShowForm(false); setEditId(null); } : openNew}
           style={{ marginLeft: "auto", background: showForm ? "#1e293b" : "linear-gradient(135deg,#10b981,#059669)", border: "1px solid #334155", color: "#fff", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           {showForm ? "✕ Cancelar" : "+ Novo Produto"}
         </button>
       </div>
 
+      {/* Formulário */}
       {showForm && (
         <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 16, padding: 20, marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, color: "#f1f5f9", marginBottom: 14 }}>{editId ? "✏️ Editar Produto" : "➕ Novo Produto"}</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Nome do Produto</label>
-              <input value={form.nome} onChange={e => setForm(p => ({...p, nome: e.target.value}))} placeholder="Ex: Gelato Morango 5L" style={inpStyle} /></div>
-            <div><label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Categoria</label>
-              <input value={form.categoria} onChange={e => setForm(p => ({...p, categoria: e.target.value}))} placeholder="Ex: Gelatos" list="cats-list" style={inpStyle} />
-              <datalist id="cats-list">{categorias.map(c => <option key={c} value={c} />)}</datalist>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Nome do Produto</label>
+              <input value={form.nome} onChange={e => setForm(p => ({...p, nome: e.target.value}))} placeholder="Ex: Gelato Morango 5L" style={inpStyle} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, color: "#64748b", display: "block", marginBottom: 4, textTransform: "uppercase" }}>Categoria</label>
+              <select value={form.categoria} onChange={e => setForm(p => ({...p, categoria: e.target.value}))}
+                style={{ ...inpStyle, color: form.categoria ? "#f1f5f9" : "#64748b" }}>
+                <option value="">Selecione a categoria</option>
+                {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
           </div>
           <button onClick={handleSave} disabled={saving}
             style={{ marginTop: 14, background: "linear-gradient(135deg,#10b981,#059669)", border: "none", color: "#fff", borderRadius: 10, padding: "9px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
-            {saving ? "Salvando..." : "💾 Salvar Produto"}
+            {saving ? "Salvando..." : `💾 ${editId ? "Atualizar" : "Salvar"} Produto`}
           </button>
         </div>
       )}
 
       {/* Filtros */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar produto..." style={{ flex: 1, minWidth: 200, background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" }} />
-        <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)} style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: filtroCat ? "#f1f5f9" : "#64748b", fontSize: 13, outline: "none" }}>
+        <input value={busca} onChange={e => setBusca(e.target.value)} placeholder="🔍 Buscar produto..."
+          style={{ flex: 1, minWidth: 200, background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" }} />
+        <select value={filtroCat} onChange={e => setFiltroCat(e.target.value)}
+          style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: filtroCat ? "#f1f5f9" : "#64748b", fontSize: 13, outline: "none" }}>
           <option value="">Todas as categorias</option>
-          {categorias.map(c => <option key={c} value={c}>{c}</option>)}
+          {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)}
+          style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" }}>
+          <option value="todos">Todos</option>
+          <option value="ativos">Ativos</option>
+          <option value="inativos">Inativos</option>
+        </select>
+        <div style={{ display: "flex", alignItems: "center", fontSize: 12, color: "#475569" }}>{filtrados.length} produto{filtrados.length !== 1 ? "s" : ""}</div>
       </div>
 
-      {/* Lista por categoria */}
-      {categorias.filter(c => !filtroCat || c === filtroCat).map(cat => {
-        const prods = filtrados.filter(p => p.categoria === cat);
-        if (prods.length === 0) return null;
-        const catCor = CAT_COLORS_PROD[cat] || "#64748b";
-        return (
-          <div key={cat} style={{ background: "#0f172a", border: `1px solid ${catCor}30`, borderRadius: 14, overflow: "hidden", marginBottom: 12 }}>
-            <div style={{ padding: "10px 16px", background: catCor + "10", borderBottom: `1px solid ${catCor}30`, display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: catCor }} />
-              <span style={{ fontWeight: 700, fontSize: 13, color: catCor }}>{cat}</span>
-              <span style={{ fontSize: 11, color: "#475569" }}>{prods.length} produto{prods.length !== 1 ? "s" : ""}</span>
-            </div>
-            {prods.map((p, i) => (
-              <div key={p.id} style={{ padding: "10px 16px", borderTop: i > 0 ? "1px solid #1e293b" : "none", display: "flex", alignItems: "center", gap: 10, opacity: p.ativo === false ? 0.5 : 1 }}>
-                <div style={{ flex: 1, fontWeight: 500, fontSize: 13, color: p.ativo === false ? "#475569" : "#f1f5f9" }}>{p.nome}</div>
-                {p.ativo === false && <span style={{ fontSize: 10, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 99, padding: "1px 7px" }}>Inativo</span>}
-                <button onClick={async () => { await onUpdate(p.id, { ativo: p.ativo === false }); }}
-                  style={{ background: p.ativo === false ? "rgba(16,185,129,0.1)" : "rgba(248,113,113,0.1)", border: p.ativo === false ? "1px solid rgba(16,185,129,0.2)" : "1px solid rgba(248,113,113,0.2)", color: p.ativo === false ? "#10b981" : "#f87171", borderRadius: 7, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>
-                  {p.ativo === false ? "Ativar" : "Desativar"}
-                </button>
-              </div>
-            ))}
-          </div>
-        );
-      })}
-      {filtrados.length === 0 && <div style={{ padding: 40, textAlign: "center", color: "#475569" }}>Nenhum produto encontrado.</div>}
+      {/* Tabela */}
+      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <Th col="nome" label="Produto" />
+                <Th col="categoria" label="Categoria" />
+                <th style={{ padding: "10px 14px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", background: "#0f172a", borderBottom: "1px solid #1e293b" }}>Status</th>
+                <th style={{ padding: "10px 14px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", background: "#0f172a", borderBottom: "1px solid #1e293b", textAlign: "right" }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.length === 0
+                ? <tr><td colSpan={4} style={{ padding: 40, textAlign: "center", color: "#475569", fontSize: 13 }}>Nenhum produto encontrado.</td></tr>
+                : filtrados.map((p, i) => {
+                    const cor = CAT_COR[p.categoria] || "#64748b";
+                    return (
+                      <tr key={p.id} style={{ borderTop: i > 0 ? "1px solid #1e293b" : "none", opacity: p.ativo === false ? 0.5 : 1 }}>
+                        <td style={{ padding: "11px 14px", fontWeight: 600, fontSize: 13, color: "#f1f5f9" }}>{p.nome}</td>
+                        <td style={{ padding: "11px 14px" }}>
+                          {p.categoria
+                            ? <span style={{ fontSize: 11, padding: "2px 10px", borderRadius: 99, fontWeight: 600, background: cor + "20", color: cor, border: `1px solid ${cor}40` }}>{p.categoria}</span>
+                            : <span style={{ fontSize: 11, color: "#334155" }}>—</span>}
+                        </td>
+                        <td style={{ padding: "11px 14px" }}>
+                          {p.ativo === false
+                            ? <span style={{ fontSize: 11, color: "#f87171", background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 99, padding: "2px 8px" }}>Inativo</span>
+                            : <span style={{ fontSize: 11, color: "#10b981", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: 99, padding: "2px 8px" }}>Ativo</span>}
+                        </td>
+                        <td style={{ padding: "11px 14px", textAlign: "right" }}>
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                            <button onClick={() => openEdit(p)}
+                              style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.3)", color: "#818cf8", borderRadius: 7, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>
+                              ✏️ Editar
+                            </button>
+                            <button onClick={async () => { await onUpdate(p.id, { ativo: p.ativo === false }); }}
+                              style={{ background: p.ativo === false ? "rgba(16,185,129,0.1)" : "rgba(248,113,113,0.1)", border: p.ativo === false ? "1px solid rgba(16,185,129,0.2)" : "1px solid rgba(248,113,113,0.2)", color: p.ativo === false ? "#10b981" : "#f87171", borderRadius: 7, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>
+                              {p.ativo === false ? "Ativar" : "Desativar"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
