@@ -2445,6 +2445,13 @@ export default function App() {
             </div>
 
             {/* Alerta: dias úteis sem nenhum abastecimento preenchido (falha do supervisor) */}
+            {perfil === "admin" && diasSemPreenchimento.length === 0 && (
+              <div style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: 16, padding: "14px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 18 }}>✅</span>
+                <div style={{ fontSize: 13, color: "#a7f3d0" }}>Nenhum alerta de preenchimento — todos os dias úteis estão com abastecimentos registrados.</div>
+              </div>
+            )}
+
             {perfil === "admin" && diasSemPreenchimento.length > 0 && (
               <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 16, padding: "16px 20px", marginBottom: 24 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
