@@ -1409,6 +1409,14 @@ function LoginScreen({ onLogin }) {
         localStorage.setItem("frota_token", data.access_token);
         if (data.refresh_token) localStorage.setItem("frota_refresh", data.refresh_token);
         localStorage.setItem("frota_user", JSON.stringify(userData));
+        // Registra login na auditoria
+        try {
+          await fetch(`${SUPABASE_URL}/rest/v1/auditoria`, {
+            method: "POST",
+            headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${data.access_token}`, "Content-Type": "application/json", "Prefer": "return=minimal" },
+            body: JSON.stringify({ acao: "LOGIN", tabela: "auth", usuario_nome: nome, descricao: `Login realizado (${perfil})` })
+          });
+        } catch {}
         onLogin(userData);
       } else {
         setErro("E-mail ou senha incorretos.");
@@ -1831,7 +1839,7 @@ export default function App() {
       mediaTipo[t].precoMedio = precos.length > 0 ? precos.reduce((a, b) => a + b, 0) / precos.length : 0;
     });
 
-    // 1. Alerta: km/L do motorista abaixo de 80% da média do tipo
+    // 1a. Alerta: km/L ACUMULADO do motorista no período abaixo de 80% da média do tipo
     const porMotTipo = {};
     abastFiltrados.forEach(r => {
       const vei = veiculos.find(v => v.id === r.veiculo_id);
@@ -1851,6 +1859,23 @@ export default function App() {
         const datasOrd = [...datas].sort();
         const periodo = datasOrd.length > 1 ? `${datasOrd[0]} a ${datasOrd[datasOrd.length-1]}` : datasOrd[0];
         lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `${kmlMot.toFixed(2)} km/L em ${tipo} — ${diff}% abaixo da média (${bench.toFixed(2)} km/L)`, detalhe: `Período: ${periodo.split(" a ").map(d => fmtData(d)).join(" a ")}`, tag: tipo });
+      }
+    });
+
+    // 1b. Alerta: abastecimento INDIVIDUAL muito abaixo da média do tipo
+    // (pode passar batido no acumulado se o motorista tiver outros abastecimentos bons)
+    abastFiltrados.forEach(r => {
+      const vei = veiculos.find(v => v.id === r.veiculo_id);
+      const tipo = vei?.tipo; if (!tipo) return;
+      const litros = parseFloat(r.combustivel_litros || 0);
+      const km = r.km_final - r.km_inicial;
+      if (litros <= 0 || km <= 0) return;
+      const kmlReg = km / litros;
+      const bench = mediaTipo[tipo]?.kml || 0;
+      if (bench > 0 && kmlReg < bench * 0.7) {
+        const nome = getNome(motoristas, r.motorista_id, r.motorista_nome);
+        const diff = (((kmlReg / bench) - 1) * 100).toFixed(0);
+        lista.push({ tipo: "danger", icone: "🔻", titulo: nome, msg: `Abastecimento isolado: ${kmlReg.toFixed(2)} km/L em ${tipo} — ${diff}% abaixo da média (${bench.toFixed(2)} km/L)`, detalhe: `Data: ${fmtData(r.data)} · ${r.veiculo_descricao || ""}`, tag: tipo });
       }
     });
 
@@ -1903,19 +1928,19 @@ export default function App() {
 
   const saveMotorista = async () => {
     if (!formMotorista.nome) return; setSaving(true);
-    try { await api("motoristas", "POST", { ...formMotorista, ativo: true }); setFormMotorista(emptyMotorista); setShowMotoristaForm(false); await loadAll(); }
+    try { await api("motoristas", "POST", { ...formMotorista, ativo: true }); await api("auditoria", "POST", { acao: "INSERT", tabela: "motoristas", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Cadastrou motorista ${formMotorista.nome}` }); setFormMotorista(emptyMotorista); setShowMotoristaForm(false); await loadAll(); }
     catch (e) { setError(e.message); } setSaving(false);
   };
 
   const saveVeiculo = async () => {
     if (!formVeiculo.placa || !formVeiculo.modelo) return; setSaving(true);
-    try { await api("veiculos", "POST", { ...formVeiculo, ano: formVeiculo.ano ? parseInt(formVeiculo.ano) : null, ativo: true }); setFormVeiculo(emptyVeiculo); setShowVeiculoForm(false); await loadAll(); }
+    try { await api("veiculos", "POST", { ...formVeiculo, ano: formVeiculo.ano ? parseInt(formVeiculo.ano) : null, ativo: true }); await api("auditoria", "POST", { acao: "INSERT", tabela: "veiculos", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Cadastrou veículo ${formVeiculo.modelo} - ${formVeiculo.placa}` }); setFormVeiculo(emptyVeiculo); setShowVeiculoForm(false); await loadAll(); }
     catch (e) { setError(e.message); } setSaving(false);
   };
 
   const updateVeiculo = async () => {
     if (!editingVeiculo) return; setSaving(true);
-    try { await api(`veiculos?id=eq.${editingVeiculo.id}`, "PATCH", { placa: editingVeiculo.placa, modelo: editingVeiculo.modelo, ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null, tipo: editingVeiculo.tipo }); setEditingVeiculo(null); await loadAll(); }
+    try { await api(`veiculos?id=eq.${editingVeiculo.id}`, "PATCH", { placa: editingVeiculo.placa, modelo: editingVeiculo.modelo, ano: editingVeiculo.ano ? parseInt(editingVeiculo.ano) : null, tipo: editingVeiculo.tipo }); await api("auditoria", "POST", { acao: "UPDATE", tabela: "veiculos", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Editou veículo ${editingVeiculo.modelo} - ${editingVeiculo.placa}` }); setEditingVeiculo(null); await loadAll(); }
     catch (e) { setError(e.message); } setSaving(false);
   };
 
@@ -2863,6 +2888,7 @@ export default function App() {
                     <button onClick={async () => {
                       const novoStatus = m.ativo === false ? true : false;
                       await api(`motoristas?id=eq.${m.id}`, "PATCH", { ativo: novoStatus });
+                      await api("auditoria", "POST", { acao: "UPDATE", tabela: "motoristas", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `${novoStatus ? "Ativou" : "Desativou"} motorista ${m.nome}` });
                       await loadAll();
                     }} style={{ background: m.ativo === false ? "rgba(16,185,129,0.1)" : "rgba(248,113,113,0.1)", border: m.ativo === false ? "1px solid rgba(16,185,129,0.2)" : "1px solid rgba(248,113,113,0.2)", color: m.ativo === false ? "#10b981" : "#f87171", borderRadius:8, padding:"5px 12px", fontSize:12, cursor:"pointer", whiteSpace:"nowrap" }}>
                       {m.ativo === false ? "✓ Reativar" : "Desativar"}
@@ -2989,8 +3015,8 @@ export default function App() {
             planejamentos={planejamentos}
             produtosProducao={produtosProducao}
             canEdit={acesso("planejamento_producao")}
-            onSave={async (data) => { await api("planejamento_producao", "POST", data); await loadAll(); }}
-            onUpdate={async (id, data) => { await api(`planejamento_producao?id=eq.${id}`, "PATCH", data); await loadAll(); }}
+            onSave={async (data) => { await api("planejamento_producao", "POST", data); await api("auditoria", "POST", { acao: "INSERT", tabela: "planejamento_producao", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Planejamento ${data.produto_nome} em ${data.data}` }); await loadAll(); }}
+            onUpdate={async (id, data) => { await api(`planejamento_producao?id=eq.${id}`, "PATCH", data); await api("auditoria", "POST", { acao: "UPDATE", tabela: "planejamento_producao", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Editou planejamento id ${id}` }); await loadAll(); }}
             onDelete={async (id) => { await api(`planejamento_producao?id=eq.${id}`, "DELETE"); await loadAll(); }}
           />
         )}
@@ -2999,8 +3025,8 @@ export default function App() {
         {!loading && tab === "cadastro_produtos" && acesso("cadastro_produtos") && (
           <CadastroProdutosTab
             produtosProducao={produtosProducao}
-            onSave={async (data) => { await api("produtos_producao", "POST", data); await loadAll(); }}
-            onUpdate={async (id, data) => { await api(`produtos_producao?id=eq.${id}`, "PATCH", data); await loadAll(); }}
+            onSave={async (data) => { await api("produtos_producao", "POST", data); await api("auditoria", "POST", { acao: "INSERT", tabela: "produtos_producao", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Cadastrou produto ${data.nome}` }); await loadAll(); }}
+            onUpdate={async (id, data) => { await api(`produtos_producao?id=eq.${id}`, "PATCH", data); await api("auditoria", "POST", { acao: "UPDATE", tabela: "produtos_producao", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Editou produto${data.nome ? " " + data.nome : ""}` }); await loadAll(); }}
           />
         )}
 
