@@ -44,6 +44,31 @@ const fmtData = (data) => {
   return `${d}/${m}/${y}`;
 };
 
+// Calcula quantos dias úteis (sem domingo) se passaram entre duas datas (exclusive a inicial)
+const diasUteisEntre = (dataInicioISO, dataFimISO) => {
+  let d = new Date(dataInicioISO + "T00:00:00");
+  const fim = new Date(dataFimISO + "T00:00:00");
+  let count = 0;
+  while (d < fim) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0) count++; // não conta domingo
+  }
+  return count;
+};
+
+// Verifica se já passou do prazo (1 dia útil + até 19h do dia útil seguinte) sem abastecimento
+const prazoVencido = (dataUltimoAbastISO, agora = new Date()) => {
+  const hojeISO = agora.toISOString().split("T")[0];
+  const diasUteis = diasUteisEntre(dataUltimoAbastISO, hojeISO);
+  if (diasUteis < 1) return false; // ainda no mesmo dia útil ou dia seguinte não chegou
+  if (diasUteis === 1) {
+    // É o dia útil seguinte: só vence depois das 19h, E não pode ser domingo
+    if (agora.getDay() === 0) return false; // domingo não conta prazo
+    return agora.getHours() >= 19;
+  }
+  return true; // mais de 1 dia útil se passou: já venceu
+};
+
 const MENU_GRUPOS = [
   { grupo: "Logística", icone: "🚚", modulos: [
     { id: "dashboard",   label: "Dashboard",      icone: "📊", desc: "KM rodados, consumo, rankings e alertas da frota" },
@@ -1926,6 +1951,43 @@ export default function App() {
     return lista.sort((a, b) => ({ danger: 0, warning: 1, info: 2 }[a.tipo] ?? 3) - ({ danger: 0, warning: 1, info: 2 }[b.tipo] ?? 3));
   }, [abastFiltrados, veiculos, checklists]);
 
+  // ─── Dias úteis sem nenhum abastecimento preenchido (falha do supervisor) ──────
+  // Verifica cada dia útil entre o início do histórico e hoje: se nenhum abastecimento
+  // foi registrado naquele dia E o prazo já venceu, é uma pendência de preenchimento.
+  const diasSemPreenchimento = useMemo(() => {
+    if (abastecimentos.length === 0) return [];
+    const agora = new Date();
+    const hojeISO = agora.toISOString().split("T")[0];
+
+    // Dias que JÁ têm pelo menos um abastecimento
+    const diasComRegistro = new Set(abastecimentos.map(r => r.data));
+
+    // Primeira data de abastecimento no sistema (não verifica antes disso)
+    const primeiraData = [...abastecimentos].sort((a, b) => a.data > b.data ? 1 : -1)[0].data;
+
+    // Dias dispensados pelo admin (salvos em localStorage)
+    let dispensados = [];
+    try { dispensados = JSON.parse(localStorage.getItem("frota_dias_dispensados") || "[]"); } catch {}
+
+    const pendentes = [];
+    let d = new Date(primeiraData + "T00:00:00");
+    const hoje = new Date(hojeISO + "T00:00:00");
+
+    while (d < hoje) {
+      const diaISO = d.toISOString().split("T")[0];
+      const diaSemana = d.getDay(); // 0 = domingo
+      if (diaSemana !== 0 && !diasComRegistro.has(diaISO) && !dispensados.includes(diaISO)) {
+        // Esse dia útil não teve nenhum abastecimento — checar se o prazo já venceu
+        if (prazoVencido(diaISO, agora)) {
+          const diasUteisAtraso = diasUteisEntre(diaISO, hojeISO);
+          pendentes.push({ data: diaISO, diasUteisAtraso });
+        }
+      }
+      d.setDate(d.getDate() + 1);
+    }
+    return pendentes.sort((a, b) => b.data > a.data ? 1 : -1);
+  }, [abastecimentos]);
+
   const saveMotorista = async () => {
     if (!formMotorista.nome) return; setSaving(true);
     try { await api("motoristas", "POST", { ...formMotorista, ativo: true }); await api("auditoria", "POST", { acao: "INSERT", tabela: "motoristas", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Cadastrou motorista ${formMotorista.nome}` }); setFormMotorista(emptyMotorista); setShowMotoristaForm(false); await loadAll(); }
@@ -2381,6 +2443,39 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Alerta: dias úteis sem nenhum abastecimento preenchido (falha do supervisor) */}
+            {perfil === "admin" && diasSemPreenchimento.length > 0 && (
+              <div style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.25)", borderRadius: 16, padding: "16px 20px", marginBottom: 24 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <span style={{ fontSize: 20 }}>⏰</span>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#f1f5f9" }}>Dias sem preenchimento de abastecimento</div>
+                  <span style={{ fontSize: 11, background: "rgba(248,113,113,0.2)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 99, padding: "2px 10px", fontWeight: 700, marginLeft: "auto" }}>{diasSemPreenchimento.length}</span>
+                </div>
+                <div style={{ fontSize: 11, color: "#64748b", marginBottom: 10 }}>
+                  Nenhum abastecimento foi registrado nestes dias úteis após o prazo (até 19h do dia útil seguinte).
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {diasSemPreenchimento.map(({ data, diasUteisAtraso }) => (
+                    <div key={data} style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: "#94a3b8", background: "rgba(0,0,0,0.15)", borderRadius: 8, padding: "8px 12px" }}>
+                      <span style={{ fontWeight: 600, color: "#f1f5f9" }}>{fmtData(data)}</span>
+                      <span style={{ fontSize: 11, color: "#f87171", fontWeight: 600 }}>{diasUteisAtraso} dia{diasUteisAtraso !== 1 ? "s" : ""} útil{diasUteisAtraso !== 1 ? "is" : ""} de atraso</span>
+                      <button onClick={() => {
+                          let dispensados = [];
+                          try { dispensados = JSON.parse(localStorage.getItem("frota_dias_dispensados") || "[]"); } catch {}
+                          dispensados.push(data);
+                          localStorage.setItem("frota_dias_dispensados", JSON.stringify(dispensados));
+                          api("auditoria", "POST", { acao: "UPDATE", tabela: "alertas", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Dispensou alerta de dia sem abastecimento: ${fmtData(data)}` });
+                          window.location.reload();
+                        }}
+                        style={{ marginLeft: "auto", background: "rgba(100,116,139,0.15)", border: "1px solid #334155", color: "#94a3b8", borderRadius: 7, padding: "4px 10px", fontSize: 11, cursor: "pointer" }}>
+                        ✕ Dispensar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Grupos de módulos */}
             {MENU_GRUPOS.map(grupo => {
