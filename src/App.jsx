@@ -1224,16 +1224,25 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
   const [novoNome, setNovoNome] = useState("");
   const [novoPerfil, setNovoPerfil] = useState("motorista");
   const [editandoPerfis, setEditandoPerfis] = useState(() => {
-    // Load from localStorage (local config - in real app would be from DB)
+    const defaults = {
+      motorista:            ["checklist"],
+      supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias", "manutencoes"],
+      supervisor_producao:  ["dashboard_producao", "planejamento_producao", "cadastro_produtos", "painel_bi"],
+      admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "manutencoes", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
+    };
     try {
       const saved = localStorage.getItem("frota_permissoes");
-      return saved ? JSON.parse(saved) : {
-        motorista:            ["checklist"],
-        supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias", "manutencoes"],
-        supervisor_producao:  ["dashboard_producao", "planejamento_producao", "cadastro_produtos", "painel_bi"],
-        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "manutencoes", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
-      };
-    } catch { return {}; }
+      if (!saved) return defaults;
+      const parsed = JSON.parse(saved);
+      // Merge: novos módulos do default sempre entram para os perfis que já os tinham
+      const merged = {};
+      Object.keys(defaults).forEach(perfil => {
+        const savedList = parsed[perfil] || [];
+        merged[perfil] = Array.from(new Set([...savedList, ...defaults[perfil]]));
+      });
+      localStorage.setItem("frota_permissoes", JSON.stringify(merged));
+      return merged;
+    } catch { return defaults; }
   });
 
   const apiAdmin = async (path, method = "GET", body = null) => {
