@@ -722,12 +722,12 @@ function AuditoriaTab({ auditLog }) {
   const selStyle = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" };
 
   return (
-    <div>
+    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-        <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#6366f1,#4f46e5)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🔍</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
+        <div style={{ width: 40, height: 40, background: "linear-gradient(135deg,#6366f1,#4f46e5)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🔍</div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Auditoria</div>
+          <div style={{ fontWeight: 700, fontSize: 20, color: "#f1f5f9" }}>Auditoria</div>
           <div style={{ fontSize: 12, color: "#475569" }}>{filtrados.length} de {audit.length} registro{audit.length !== 1 ? "s" : ""}</div>
         </div>
       </div>
@@ -2342,6 +2342,7 @@ export default function App() {
           {perfil === "admin" && (
             <NavGroup label="⚙️ Admin" show={true}>
               {sideNavBtn("⚙️", "Configurações", tab === "configuracoes", () => { setTab("configuracoes"); setSidebarOpen(false); })}
+              {acesso("auditoria") && sideNavBtn("🔍", "Auditoria", tab === "auditoria", () => { setTab("auditoria"); setSidebarOpen(false); })}
             </NavGroup>
           )}
         </div>
