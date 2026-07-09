@@ -85,7 +85,7 @@ const MENU_GRUPOS = [
     { id: "dashboard_producao",    label: "Dashboard",    icone: "📊", desc: "Acompanhe metas e realizações de produção" },
     { id: "planejamento_producao", label: "Planejamento", icone: "📅", desc: "Registre o planejamento diário de produção" },
     { id: "cadastro_produtos",     label: "Produtos",     icone: "📦", desc: "Cadastro de produtos e categorias" },
-    { id: "painel_bi",             label: "Painel BI",    icone: "📊", desc: "Dashboard analítico de produção", externo: "/dashboard_supremo.html" },
+    { id: "painel_bi",             label: "Painel BI",    icone: "📊", desc: "Dashboard analítico de produção", externo: "https://supremoacai-pz4zgglgw4dhgnjjsyptdi.streamlit.app/" },
   ]},
   { grupo: "Admin", icone: "⚙️", modulos: [
     { id: "configuracoes", label: "Configurações", icone: "⚙️", desc: "Usuários, perfis e permissões do sistema" },
@@ -1205,7 +1205,7 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
     { id: "dashboard_producao",   label: "🏭 Dashboard Produção",  grupo: "Produção" },
     { id: "planejamento_producao",label: "📅 Planejamento",        grupo: "Produção" },
     { id: "cadastro_produtos",    label: "📦 Produtos",            grupo: "Produção" },
-    { id: "painel_bi",            label: "📊 Painel BI",           grupo: "Produção", externo: "/dashboard_supremo.html" },
+    { id: "painel_bi",            label: "📊 Painel BI",           grupo: "Produção", externo: "https://supremoacai-pz4zgglgw4dhgnjjsyptdi.streamlit.app/" },
     { id: "ia",                   label: "🤖 IA",                   grupo: "IA" },
     { id: "configuracoes",        label: "⚙️ Configurações",       grupo: "Admin" },
     { id: "auditoria",            label: "🔍 Auditoria",           grupo: "Admin" },
@@ -2660,7 +2660,7 @@ export default function App() {
               {acesso("dashboard_producao") && sideNavBtn("📊", "Dashboard", tab === "dashboard_producao", () => { setTab("dashboard_producao"); setSidebarOpen(false); })}
               {acesso("planejamento_producao") && sideNavBtn("📅", "Planejamento", tab === "planejamento_producao", () => { setTab("planejamento_producao"); setSidebarOpen(false); })}
               {acesso("cadastro_produtos") && sideNavBtn("📦", "Produtos", tab === "cadastro_produtos", () => { setTab("cadastro_produtos"); setSidebarOpen(false); })}
-              {acesso("dashboard_producao") && sideNavBtn("📊", "Painel BI", false, () => { setSidebarOpen(false); window.open("/dashboard_supremo.html", "_blank"); })}
+              {acesso("painel_bi") && sideNavBtn("📊", "Painel BI", false, () => { setSidebarOpen(false); window.open("https://supremoacai-pz4zgglgw4dhgnjjsyptdi.streamlit.app/", "_blank"); })}
             </NavGroup>
           )}
           {perfil === "admin" && (
