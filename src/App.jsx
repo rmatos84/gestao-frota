@@ -722,7 +722,7 @@ function AuditoriaTab({ auditLog }) {
   const selStyle = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" };
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <div>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24 }}>
         <div style={{ width: 40, height: 40, background: "linear-gradient(135deg,#6366f1,#4f46e5)", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🔍</div>
