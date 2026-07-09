@@ -2243,9 +2243,9 @@ export default function App() {
   };
 
   const NavGroup = ({ label, show, children }) => {
-    const [open, setOpen] = useState(true);
-    if (!show) return null;
     const hasActive = Array.isArray(children) ? children.some(c => c && c.props?.active) : false;
+    const [open, setOpen] = useState(hasActive); // recolhido por padrão, abre se tem item ativo
+    if (!show) return null;
     return (
       <div style={{ marginBottom: 2 }}>
         <button onClick={() => setOpen(o => !o)}
