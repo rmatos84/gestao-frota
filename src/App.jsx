@@ -702,7 +702,7 @@ function CadastroProdutosTab({ produtosProducao, onSave, onUpdate, onDelete }) {
 
 
 // ─── Auditoria Tab ─────────────────────────────────────────────
-function AuditoriaTab({ auditLog, user }) {
+function AuditoriaTab({ auditLog }) {
   const [filtroAcao, setFiltroAcao] = useState("");
   const [filtroUsuario, setFiltroUsuario] = useState("");
   const [filtroIni, setFiltroIni] = useState("");
@@ -719,59 +719,84 @@ function AuditoriaTab({ auditLog, user }) {
     (!filtroFim || a.criado_em?.slice(0,10) <= filtroFim)
   );
 
+  const selStyle = { background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" };
+
   return (
     <div>
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#6366f1,#4f46e5)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🔍</div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 18, color: "#f1f5f9" }}>Auditoria</div>
-          <div style={{ fontSize: 12, color: "#475569" }}>{filtrados.length} registro{filtrados.length !== 1 ? "s" : ""}</div>
+          <div style={{ fontSize: 12, color: "#475569" }}>{filtrados.length} de {audit.length} registro{audit.length !== 1 ? "s" : ""}</div>
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <select value={filtroAcao} onChange={e => setFiltroAcao(e.target.value)}
-          style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: filtroAcao ? "#f1f5f9" : "#64748b", fontSize: 13, outline: "none" }}>
+      {/* Filtros */}
+      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        <select value={filtroAcao} onChange={e => setFiltroAcao(e.target.value)} style={{ ...selStyle, color: filtroAcao ? "#f1f5f9" : "#64748b" }}>
           <option value="">Todas as ações</option>
           {acoes.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)}
-          style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: filtroUsuario ? "#f1f5f9" : "#64748b", fontSize: 13, outline: "none" }}>
+        <select value={filtroUsuario} onChange={e => setFiltroUsuario(e.target.value)} style={{ ...selStyle, color: filtroUsuario ? "#f1f5f9" : "#64748b" }}>
           <option value="">Todos os usuários</option>
           {usuarios.map(u => <option key={u} value={u}>{u}</option>)}
         </select>
-        <input type="date" value={filtroIni} onChange={e => setFiltroIni(e.target.value)}
-          style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" }} />
-        <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)}
-          style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#f1f5f9", fontSize: 13, outline: "none" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "#64748b" }}>De</span>
+          <input type="date" value={filtroIni} onChange={e => setFiltroIni(e.target.value)} style={selStyle} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, color: "#64748b" }}>Até</span>
+          <input type="date" value={filtroFim} onChange={e => setFiltroFim(e.target.value)} style={selStyle} />
+        </div>
+        {(filtroAcao || filtroUsuario || filtroIni || filtroFim) && (
+          <button onClick={() => { setFiltroAcao(""); setFiltroUsuario(""); setFiltroIni(""); setFiltroFim(""); }}
+            style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", borderRadius: 8, padding: "7px 12px", fontSize: 12, cursor: "pointer" }}>
+            ✕ Limpar filtros
+          </button>
+        )}
       </div>
 
+      {/* Tabela */}
       <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["Data/Hora","Usuário","Ação","Tabela","Descrição"].map(h => (
-                  <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", background: "#0f172a", borderBottom: "1px solid #1e293b", whiteSpace: "nowrap" }}>{h}</th>
+                {[["DATA/HORA","160px"],["USUÁRIO","180px"],["AÇÃO","90px"],["TABELA","140px"],["DESCRIÇÃO","auto"]].map(([h, w]) => (
+                  <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700, background: "#0f172a", borderBottom: "1px solid #1e293b", whiteSpace: "nowrap", width: w }}>
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtrados.length === 0
-                ? <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#475569" }}>Nenhum registro encontrado.</td></tr>
-                : filtrados.slice(0,200).map((a, i) => {
+                ? <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#475569", fontSize: 13 }}>Nenhum registro encontrado.</td></tr>
+                : filtrados.slice(0, 200).map((a, i) => {
                     const cor = ACAO_CORES[a.acao] || "#64748b";
                     const dt = a.criado_em ? new Date(a.criado_em) : null;
-                    const dtFmt = dt ? `${fmtData(dt.toISOString().slice(0,10))} ${dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}` : "—";
+                    const dtFmt = dt
+                      ? `${fmtData(dt.toISOString().slice(0,10))} ${dt.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`
+                      : "—";
                     return (
-                      <tr key={a.id} style={{ borderTop: i > 0 ? "1px solid #1e293b" : "none" }}>
-                        <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>{dtFmt}</td>
-                        <td style={{ padding: "10px 14px", fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{a.usuario_nome || "—"}</td>
-                        <td style={{ padding: "10px 14px" }}>
-                          <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 99, fontWeight: 700, background: cor+"20", color: cor, border: `1px solid ${cor}40` }}>{a.acao}</span>
+                      <tr key={a.id} style={{ borderTop: i > 0 ? "1px solid #1e293b" : "none", transition: "background .1s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#1e293b"}
+                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                        <td style={{ padding: "11px 16px", fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>{dtFmt}</td>
+                        <td style={{ padding: "11px 16px" }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#f1f5f9" }}>{a.usuario_nome || "—"}</div>
                         </td>
-                        <td style={{ padding: "10px 14px", fontSize: 12, color: "#94a3b8" }}>{a.tabela || "—"}</td>
-                        <td style={{ padding: "10px 14px", fontSize: 12, color: "#64748b", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.descricao}>{a.descricao || "—"}</td>
+                        <td style={{ padding: "11px 16px" }}>
+                          <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 99, fontWeight: 700, background: cor+"20", color: cor, border: `1px solid ${cor}40`, whiteSpace: "nowrap" }}>
+                            {a.acao}
+                          </span>
+                        </td>
+                        <td style={{ padding: "11px 16px", fontSize: 12, color: "#94a3b8" }}>{a.tabela || "—"}</td>
+                        <td style={{ padding: "11px 16px", fontSize: 12, color: "#64748b", maxWidth: 350, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.descricao}>
+                          {a.descricao || "—"}
+                        </td>
                       </tr>
                     );
                   })
@@ -779,7 +804,11 @@ function AuditoriaTab({ auditLog, user }) {
             </tbody>
           </table>
         </div>
-        {filtrados.length > 200 && <div style={{ padding: "10px 16px", fontSize: 12, color: "#475569", borderTop: "1px solid #1e293b" }}>Mostrando 200 de {filtrados.length} registros. Use os filtros para refinar.</div>}
+        {filtrados.length > 200 && (
+          <div style={{ padding: "10px 16px", fontSize: 12, color: "#475569", borderTop: "1px solid #1e293b", textAlign: "center" }}>
+            Mostrando 200 de {filtrados.length} registros — use os filtros para refinar a busca.
+          </div>
+        )}
       </div>
     </div>
   );
