@@ -3264,6 +3264,8 @@ export default function App() {
             <ConfiguracoesTab user={user} SUPABASE_URL={SUPABASE_URL} SUPABASE_KEY={SUPABASE_KEY} PERFIS={PERFIS} />
           </div>
         )}
+
+        {!loading && tab === "auditoria" && acesso("auditoria") && <AuditoriaTab auditLog={auditLog} user={user} />}
       </div>
 
             {/* MODAL DETALHES CHECKLIST */}
@@ -3465,7 +3467,6 @@ export default function App() {
         </div>
       )}
 
-        {!loading && tab === "auditoria" && acesso("auditoria") && <AuditoriaTab auditLog={auditLog} user={user} />}
     </div>
   );
 }
