@@ -23,10 +23,10 @@ const PERMISSOES = {
     modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
   },
   supervisor_producao: {
-    modulos: ["dashboard_producao", "planejamento_producao", "cadastro_produtos"],
+    modulos: ["dashboard_producao", "planejamento_producao", "cadastro_produtos", "painel_bi"],
   },
   admin: {
-    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos"],
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
   },
 };
 
@@ -84,6 +84,7 @@ const MENU_GRUPOS = [
     { id: "dashboard_producao",    label: "Dashboard",    icone: "📊", desc: "Acompanhe metas e realizações de produção" },
     { id: "planejamento_producao", label: "Planejamento", icone: "📅", desc: "Registre o planejamento diário de produção" },
     { id: "cadastro_produtos",     label: "Produtos",     icone: "📦", desc: "Cadastro de produtos e categorias" },
+    { id: "painel_bi",             label: "Painel BI",    icone: "📊", desc: "Dashboard analítico de produção", externo: "/dashboard_supremo.html" },
   ]},
   { grupo: "Admin", icone: "⚙️", modulos: [
     { id: "configuracoes", label: "Configurações", icone: "⚙️", desc: "Usuários, perfis e permissões do sistema" },
@@ -1089,6 +1090,7 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
     { id: "dashboard_producao",   label: "🏭 Dashboard Produção",  grupo: "Produção" },
     { id: "planejamento_producao",label: "📅 Planejamento",        grupo: "Produção" },
     { id: "cadastro_produtos",    label: "📦 Produtos",            grupo: "Produção" },
+    { id: "painel_bi",            label: "📊 Painel BI",           grupo: "Produção", externo: "/dashboard_supremo.html" },
     { id: "ia",                   label: "🤖 IA",                   grupo: "IA" },
     { id: "configuracoes",        label: "⚙️ Configurações",       grupo: "Admin" },
     { id: "auditoria",            label: "🔍 Auditoria",           grupo: "Admin" },
@@ -1113,8 +1115,8 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
       return saved ? JSON.parse(saved) : {
         motorista:            ["checklist"],
         supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
-        supervisor_producao:  ["dashboard_producao", "planejamento_producao", "cadastro_produtos"],
-        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos"],
+        supervisor_producao:  ["dashboard_producao", "planejamento_producao", "cadastro_produtos", "painel_bi"],
+        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
       };
     } catch { return {}; }
   });
@@ -2220,6 +2222,7 @@ export default function App() {
               {acesso("dashboard_producao") && sideNavBtn("📊", "Dashboard", tab === "dashboard_producao", () => { setTab("dashboard_producao"); setSidebarOpen(false); })}
               {acesso("planejamento_producao") && sideNavBtn("📅", "Planejamento", tab === "planejamento_producao", () => { setTab("planejamento_producao"); setSidebarOpen(false); })}
               {acesso("cadastro_produtos") && sideNavBtn("📦", "Produtos", tab === "cadastro_produtos", () => { setTab("cadastro_produtos"); setSidebarOpen(false); })}
+              {acesso("dashboard_producao") && sideNavBtn("📊", "Painel BI", false, () => { setSidebarOpen(false); window.open("/dashboard_supremo.html", "_blank"); })}
             </NavGroup>
           )}
           {perfil === "admin" && (
@@ -2495,7 +2498,7 @@ export default function App() {
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:12 }}>
                     {modulosAcessiveis.map(m => (
-                      <button key={m.id} onClick={() => setTab(m.id)}
+                      <button key={m.id} onClick={() => m.externo ? window.open(m.externo, '_blank') : setTab(m.id)}
                         style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"left", transition:"all 0.15s" }}
                         onMouseEnter={e => { e.currentTarget.style.border="1px solid #06b6d4"; e.currentTarget.style.background="rgba(6,182,212,0.05)"; }}
                         onMouseLeave={e => { e.currentTarget.style.border="1px solid #1e293b"; e.currentTarget.style.background="#0f172a"; }}>
