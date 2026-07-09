@@ -20,13 +20,13 @@ const PERMISSOES = {
     modulos: ["checklist"],
   },
   supervisor_logistica: {
-    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias", "manutencoes"],
   },
   supervisor_producao: {
     modulos: ["dashboard_producao", "planejamento_producao", "cadastro_produtos", "painel_bi"],
   },
   admin: {
-    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
+    modulos: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "manutencoes", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
   },
 };
 
@@ -74,7 +74,8 @@ const MENU_GRUPOS = [
     { id: "dashboard",   label: "Dashboard",      icone: "📊", desc: "KM rodados, consumo, rankings e alertas da frota" },
     { id: "registros",   label: "Abastecimentos", icone: "⛽", desc: "Registre e consulte todos os abastecimentos" },
     { id: "checklist",   label: "Checklist",      icone: "✅", desc: "Inspeção diária de veículos" },
-    { id: "ocorrencias", label: "Ocorrências",    icone: "📝", desc: "Registre penalidades e erros de conduta" },
+    { id: "ocorrencias",  label: "Ocorrências",   icone: "📝", desc: "Registre penalidades e erros de conduta" },
+    { id: "manutencoes",  label: "Manutenções",   icone: "🔧", desc: "Registre e acompanhe manutenções da frota" },
   ]},
   { grupo: "Cadastros", icone: "📋", modulos: [
     { id: "motoristas",  label: "Motoristas",     icone: "👤", desc: "Gerencie o cadastro de motoristas" },
@@ -1227,9 +1228,9 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
       const saved = localStorage.getItem("frota_permissoes");
       return saved ? JSON.parse(saved) : {
         motorista:            ["checklist"],
-        supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias"],
+        supervisor_logistica: ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ocorrencias", "manutencoes"],
         supervisor_producao:  ["dashboard_producao", "planejamento_producao", "cadastro_produtos", "painel_bi"],
-        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
+        admin:                ["dashboard", "registros", "checklist", "motoristas", "veiculos", "ia", "configuracoes", "ocorrencias", "manutencoes", "dashboard_producao", "planejamento_producao", "cadastro_produtos", "auditoria", "painel_bi"],
       };
     } catch { return {}; }
   });
@@ -1622,6 +1623,306 @@ function LoginScreen({ onLogin }) {
 }
 
 // ─── Main App ────────────────────────────────────────────────
+// ============================================================
+// MÓDULO MANUTENÇÕES — Supremo Açaí 360°
+// ============================================================
+function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelete }) {
+  const [form, setForm] = React.useState({ data: "", veiculo_id: "", descricao: "", valor: "" });
+  const [editId, setEditId] = React.useState(null);
+  const [showForm, setShowForm] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [erro, setErro] = React.useState("");
+  const [sort, setSort] = React.useState({ col: "data", dir: "desc" });
+  const [filtroVeiculo, setFiltroVeiculo] = React.useState("");
+  const [filtroDataIni, setFiltroDataIni] = React.useState("");
+  const [filtroDataFim, setFiltroDataFim] = React.useState("");
+  const [confirmDelete, setConfirmDelete] = React.useState(null);
+
+  const resetForm = () => {
+    setForm({ data: "", veiculo_id: "", descricao: "", valor: "" });
+    setEditId(null);
+    setErro("");
+  };
+
+  const abrirNovo = () => { resetForm(); setShowForm(true); };
+
+  const abrirEditar = (m) => {
+    setForm({ data: m.data || "", veiculo_id: m.veiculo_id || "", descricao: m.descricao || "", valor: m.valor != null ? String(m.valor) : "" });
+    setEditId(m.id);
+    setShowForm(true);
+    setErro("");
+  };
+
+  const salvar = async () => {
+    if (!form.data) { setErro("Informe a data."); return; }
+    if (!form.veiculo_id) { setErro("Selecione o veículo."); return; }
+    if (!form.descricao.trim()) { setErro("Informe a descrição do serviço."); return; }
+    const valor = parseFloat(String(form.valor).replace(",", "."));
+    if (isNaN(valor) || valor < 0) { setErro("Informe um valor válido."); return; }
+    setSaving(true);
+    setErro("");
+    try {
+      const payload = { data: form.data, veiculo_id: form.veiculo_id, descricao: form.descricao.trim(), valor };
+      if (editId) {
+        await onUpdate(editId, payload);
+      } else {
+        await onSave(payload);
+      }
+      setShowForm(false);
+      resetForm();
+    } catch (e) { setErro("Erro ao salvar: " + e.message); }
+    setSaving(false);
+  };
+
+  const excluir = async (id) => {
+    try { await onDelete(id); setConfirmDelete(null); } catch (e) { alert("Erro ao excluir: " + e.message); }
+  };
+
+  // Filtrar
+  const filtradas = manutencoes.filter(m => {
+    if (filtroVeiculo && m.veiculo_id !== filtroVeiculo) return false;
+    if (filtroDataIni && m.data < filtroDataIni) return false;
+    if (filtroDataFim && m.data > filtroDataFim) return false;
+    return true;
+  });
+
+  // Ordenar
+  const sorted = [...filtradas].sort((a, b) => {
+    let va, vb;
+    if (sort.col === "data")     { va = a.data;  vb = b.data; }
+    else if (sort.col === "veiculo") {
+      const nA = veiculos.find(v => v.id === a.veiculo_id);
+      const nB = veiculos.find(v => v.id === b.veiculo_id);
+      va = `${nA?.modelo||""} ${nA?.placa||""}`;
+      vb = `${nB?.modelo||""} ${nB?.placa||""}`;
+    }
+    else if (sort.col === "descricao") { va = a.descricao||""; vb = b.descricao||""; }
+    else if (sort.col === "valor")     { va = parseFloat(a.valor||0); vb = parseFloat(b.valor||0); }
+    else { va = a[sort.col]||""; vb = b[sort.col]||""; }
+    if (va < vb) return sort.dir === "asc" ? -1 : 1;
+    if (va > vb) return sort.dir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const totalValor = filtradas.reduce((s, m) => s + parseFloat(m.valor || 0), 0);
+  const temFiltro = filtroVeiculo || filtroDataIni || filtroDataFim;
+
+  const SortTh = ({ col, label, style = {} }) => {
+    const active = sort.col === col;
+    return (
+      <th onClick={() => setSort(s => ({ col, dir: s.col === col && s.dir === "asc" ? "desc" : "asc" }))}
+        style={{ padding: "10px 14px", textAlign: "left", color: active ? "#06b6d4" : "#64748b",
+          fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+          cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", ...style }}>
+        {label} {active ? (sort.dir === "asc" ? "▲" : "▼") : "⇅"}
+      </th>
+    );
+  };
+
+  return (
+    <div>
+      {/* Cabeçalho */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+        <div style={{ width: 48, height: 48, background: "linear-gradient(135deg,#f59e0b,#d97706)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>🔧</div>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#f1f5f9" }}>Manutenções</div>
+          <div style={{ fontSize: 13, color: "#64748b" }}>{filtradas.length} registro{filtradas.length !== 1 ? "s" : ""}{temFiltro ? " (filtrado)" : ""}</div>
+        </div>
+        <button onClick={abrirNovo}
+          style={{ marginLeft: "auto", background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 10, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 8 }}>
+          + Nova Manutenção
+        </button>
+      </div>
+
+      {/* KPI resumo */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 12, marginBottom: 20 }}>
+        {[
+          { label: "Total de Registros", valor: filtradas.length, icone: "🔧", cor: "#f59e0b" },
+          { label: "Custo Total",        valor: `R$ ${totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, icone: "💰", cor: "#10b981" },
+          { label: "Veículos Atendidos", valor: new Set(filtradas.map(m => m.veiculo_id)).size, icone: "🚗", cor: "#06b6d4" },
+        ].map(k => (
+          <div key={k.label} style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, padding: "16px 18px" }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>{k.icone}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: k.cor, marginBottom: 2 }}>{k.valor}</div>
+            <div style={{ fontSize: 11, color: "#475569" }}>{k.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filtros */}
+      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, padding: "16px 20px", marginBottom: 16, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Veículo</label>
+          <select value={filtroVeiculo} onChange={e => setFiltroVeiculo(e.target.value)}
+            style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: "8px 12px", fontSize: 13, minWidth: 160 }}>
+            <option value="">Todos</option>
+            {veiculos.map(v => <option key={v.id} value={v.id}>{v.modelo} — {v.placa}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>De</label>
+          <input type="date" value={filtroDataIni} onChange={e => setFiltroDataIni(e.target.value)}
+            style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: "8px 12px", fontSize: 13 }} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>Até</label>
+          <input type="date" value={filtroDataFim} onChange={e => setFiltroDataFim(e.target.value)}
+            style={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: "8px 12px", fontSize: 13 }} />
+        </div>
+        {temFiltro && (
+          <button onClick={() => { setFiltroVeiculo(""); setFiltroDataIni(""); setFiltroDataFim(""); }}
+            style={{ background: "rgba(100,116,139,0.15)", border: "1px solid #334155", color: "#94a3b8", borderRadius: 8, padding: "8px 14px", fontSize: 12, cursor: "pointer" }}>
+            ✕ Limpar filtros
+          </button>
+        )}
+      </div>
+
+      {/* Tabela */}
+      <div style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid #1e293b" }}>
+                <SortTh col="data"      label="Data" />
+                <SortTh col="veiculo"   label="Veículo" />
+                <SortTh col="descricao" label="Descrição do Serviço" />
+                <SortTh col="valor"     label="Valor" style={{ textAlign: "right" }} />
+                <th style={{ padding: "10px 14px", color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase", width: 80 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 && (
+                <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "#475569", fontSize: 14 }}>
+                  {temFiltro ? "Nenhum resultado para os filtros aplicados." : "Nenhuma manutenção cadastrada ainda."}
+                </td></tr>
+              )}
+              {sorted.map((m, i) => {
+                const vei = veiculos.find(v => v.id === m.veiculo_id);
+                return (
+                  <tr key={m.id} style={{ borderBottom: "1px solid #0f172a", background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)" }}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,11,0.04)"}
+                    onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.01)"}>
+                    <td style={{ padding: "12px 14px", color: "#94a3b8", fontSize: 13, whiteSpace: "nowrap" }}>{fmtData(m.data)}</td>
+                    <td style={{ padding: "12px 14px" }}>
+                      <div style={{ fontWeight: 600, color: "#f1f5f9", fontSize: 13 }}>{vei?.modelo || "—"}</div>
+                      <div style={{ fontSize: 11, color: "#475569" }}>{vei?.placa || ""}</div>
+                    </td>
+                    <td style={{ padding: "12px 14px", color: "#94a3b8", fontSize: 13, maxWidth: 320 }}>{m.descricao}</td>
+                    <td style={{ padding: "12px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
+                      <span style={{ fontWeight: 700, color: "#f59e0b", fontSize: 14 }}>
+                        R$ {parseFloat(m.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 14px", textAlign: "center" }}>
+                      <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                        <button onClick={() => abrirEditar(m)} title="Editar"
+                          style={{ background: "rgba(6,182,212,0.1)", border: "1px solid rgba(6,182,212,0.2)", color: "#06b6d4", borderRadius: 7, padding: "5px 10px", fontSize: 13, cursor: "pointer" }}>✏️</button>
+                        <button onClick={() => setConfirmDelete(m.id)} title="Excluir"
+                          style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", borderRadius: 7, padding: "5px 10px", fontSize: 13, cursor: "pointer" }}>🗑️</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal Formulário */}
+      {showForm && (
+        <div onClick={() => { setShowForm(false); resetForm(); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 20, width: "100%", maxWidth: 480, padding: 28 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#f1f5f9", marginBottom: 24 }}>
+              {editId ? "Editar Manutenção" : "Nova Manutenção"}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Data */}
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Data *</label>
+                <input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
+                  style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: "10px 14px", fontSize: 14 }} />
+              </div>
+
+              {/* Veículo */}
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Veículo *</label>
+                <select value={form.veiculo_id} onChange={e => setForm(f => ({ ...f, veiculo_id: e.target.value }))}
+                  style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: form.veiculo_id ? "#f1f5f9" : "#64748b", padding: "10px 14px", fontSize: 14 }}>
+                  <option value="">Selecione o veículo...</option>
+                  {veiculos.filter(v => v.ativo !== false).map(v => (
+                    <option key={v.id} value={v.id}>{v.modelo} — {v.placa} ({v.tipo})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Descrição do Serviço *</label>
+                <textarea value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                  placeholder="Ex: Troca de óleo e filtros, revisão dos freios..."
+                  rows={3}
+                  style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: "10px 14px", fontSize: 14, resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+
+              {/* Valor */}
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Valor (R$) *</label>
+                <input type="number" step="0.01" min="0" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+                  placeholder="0,00"
+                  style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: "10px 14px", fontSize: 14 }} />
+              </div>
+            </div>
+
+            {erro && (
+              <div style={{ background: "rgba(248,113,113,0.1)", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 8, padding: "10px 14px", color: "#f87171", fontSize: 13, marginTop: 16 }}>
+                {erro}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+              <button onClick={() => { setShowForm(false); resetForm(); }}
+                style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#94a3b8", borderRadius: 10, padding: "12px", fontSize: 14, cursor: "pointer" }}>
+                Cancelar
+              </button>
+              <button onClick={salvar} disabled={saving}
+                style={{ flex: 2, background: saving ? "#374151" : "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", color: "#fff", borderRadius: 10, padding: "12px", fontSize: 14, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer" }}>
+                {saving ? "Salvando..." : editId ? "Salvar Alterações" : "Cadastrar Manutenção"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmação exclusão */}
+      {confirmDelete && (
+        <div onClick={() => setConfirmDelete(null)}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: "#0f172a", border: "1px solid rgba(248,113,113,0.3)", borderRadius: 16, padding: 28, maxWidth: 380, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>Excluir Manutenção</div>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 24 }}>Esta ação não pode ser desfeita.</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setConfirmDelete(null)}
+                style={{ flex: 1, background: "#1e293b", border: "1px solid #334155", color: "#94a3b8", borderRadius: 10, padding: "11px", fontSize: 14, cursor: "pointer" }}>
+                Cancelar
+              </button>
+              <button onClick={() => excluir(confirmDelete)}
+                style={{ flex: 1, background: "rgba(248,113,113,0.2)", border: "1px solid rgba(248,113,113,0.4)", color: "#f87171", borderRadius: 10, padding: "11px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(() => {
     try {
@@ -1694,6 +1995,7 @@ export default function App() {
 
   // Abastecimentos - filtros, ordenação e paginação
   const [ocorrencias, setOcorrencias] = useState([]);
+  const [manutencoes, setManutencoes] = useState([]);
   const [produtosProducao, setProdutosProducao] = useState([]);
   const [planejamentos, setPlanejamentos] = useState([]);
   const [abastFiltroMotorista, setAbastFiltroMotorista] = useState("");
@@ -1724,7 +2026,7 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [m, v, a, c, oc, pp, au, pl] = await Promise.all([
+      const [m, v, a, c, oc, pp, au, pl, mn] = await Promise.all([
         api("motoristas?select=*&order=nome"),
         api("veiculos?select=*&order=modelo"),
         api("abastecimentos?select=*&order=data.desc"),
@@ -1733,6 +2035,7 @@ export default function App() {
         api("produtos_producao?select=*&order=nome"),
         api("auditoria?select=*&order=criado_em.desc&limit=500"),
         api("planejamento_producao?select=*&order=data.desc"),
+        api("manutencoes?select=*&order=data.desc"),
       ]);
 
       setMotoristas(Array.isArray(m) ? m : []); 
@@ -1743,6 +2046,7 @@ export default function App() {
       setProdutosProducao(Array.isArray(pp) ? pp : []);
       setAuditLog(Array.isArray(au) ? au : []);
       setPlanejamentos(Array.isArray(pl) ? pl : []);
+      setManutencoes(Array.isArray(mn) ? mn : []);
     } catch (e) { setError("Erro ao carregar dados: " + e.message); }
     setLoading(false);
   };
@@ -2330,11 +2634,12 @@ export default function App() {
             style={{ display:"flex", alignItems:"center", gap:10, width:"100%", padding:"10px 14px", borderRadius:10, border:"none", cursor:"pointer", fontSize:13, fontWeight: tab==="home"?600:400, background: tab==="home"?"linear-gradient(135deg,rgba(6,182,212,0.2),rgba(59,130,246,0.2))":"transparent", color: tab==="home"?"#06b6d4":"#94a3b8", marginBottom:4, textAlign:"left", borderLeft: tab==="home"?"3px solid #06b6d4":"3px solid transparent" }}>
             <span style={{ fontSize:16 }}>🏠</span> Home
           </button>
-          <NavGroup label="🚚 Logística" show={acesso("dashboard") || acesso("registros") || acesso("checklist") || acesso("ocorrencias")}>
+          <NavGroup label="🚚 Logística" show={acesso("dashboard") || acesso("registros") || acesso("checklist") || acesso("ocorrencias") || acesso("manutencoes")}>
             {acesso("dashboard") && sideNavBtn("📊", "Dashboard", tab === "dashboard", () => { setTab("dashboard"); setSidebarOpen(false); })}
             {acesso("registros") && sideNavBtn("⛽", "Abastecimentos", tab === "registros", () => { setTab("registros"); setSidebarOpen(false); })}
             {acesso("checklist") && sideNavBtn("✅", "Checklist", tab === "checklist", () => { setTab("checklist"); setSidebarOpen(false); })}
             {acesso("ocorrencias") && sideNavBtn("📝", "Ocorrências", tab === "ocorrencias", () => { setTab("ocorrencias"); setSidebarOpen(false); })}
+            {acesso("manutencoes") && sideNavBtn("🔧", "Manutenções", tab === "manutencoes", () => { setTab("manutencoes"); setSidebarOpen(false); })}
           </NavGroup>
           <NavGroup label="📋 Cadastros" show={acesso("motoristas") || acesso("veiculos")}>
             {acesso("motoristas") && sideNavBtn("👤", "Motoristas", tab === "motoristas", () => { setTab("motoristas"); setSidebarOpen(false); })}
@@ -3214,6 +3519,29 @@ export default function App() {
 
 
         {/* OCORRÊNCIAS */}
+        {!loading && tab === "manutencoes" && acesso("manutencoes") && (
+          <ManutencoesTab
+            manutencoes={manutencoes}
+            veiculos={veiculos}
+            user={user}
+            onSave={async (data) => {
+              await api("manutencoes", "POST", data);
+              await api("auditoria", "POST", { acao: "INSERT", tabela: "manutencoes", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Cadastrou manutenção: ${data.descricao?.substring(0, 60)}` });
+              await loadAll();
+            }}
+            onUpdate={async (id, data) => {
+              await api(`manutencoes?id=eq.${id}`, "PATCH", data);
+              await api("auditoria", "POST", { acao: "UPDATE", tabela: "manutencoes", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Editou manutenção: ${data.descricao?.substring(0, 60)}` });
+              await loadAll();
+            }}
+            onDelete={async (id) => {
+              await api(`manutencoes?id=eq.${id}`, "DELETE");
+              await api("auditoria", "POST", { acao: "DELETE", tabela: "manutencoes", usuario_nome: user?.user_metadata?.nome || user?.email, descricao: `Removeu registro de manutenção` });
+              await loadAll();
+            }}
+          />
+        )}
+
         {!loading && tab === "ocorrencias" && acesso("ocorrencias") && (
           <OcorrenciasTab
             motoristas={motoristas}
