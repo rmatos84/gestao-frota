@@ -1695,7 +1695,7 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [m, v, a, c, oc, pp, pl] = await Promise.all([
+      const [m, v, a, c, oc, pp, au, pl] = await Promise.all([
         api("motoristas?select=*&order=nome"),
         api("veiculos?select=*&order=modelo"),
         api("abastecimentos?select=*&order=data.desc"),
@@ -1712,6 +1712,7 @@ export default function App() {
       setChecklists(Array.isArray(c) ? c : []);
       setOcorrencias(Array.isArray(oc) ? oc : []);
       setProdutosProducao(Array.isArray(pp) ? pp : []);
+      setAuditLog(Array.isArray(au) ? au : []);
       setPlanejamentos(Array.isArray(pl) ? pl : []);
     } catch (e) { setError("Erro ao carregar dados: " + e.message); }
     setLoading(false);
