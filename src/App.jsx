@@ -1199,6 +1199,7 @@ function ConfiguracoesTab({ user, SUPABASE_URL, SUPABASE_KEY, PERFIS }) {
     { id: "registros",            label: "⛽ Abastecimentos",      grupo: "Logística" },
     { id: "checklist",            label: "✅ Checklist",            grupo: "Logística" },
     { id: "ocorrencias",          label: "📝 Ocorrências",         grupo: "Operações" },
+    { id: "manutencoes",          label: "🔧 Manutenções",         grupo: "Operações" },
     { id: "motoristas",           label: "👤 Motoristas",           grupo: "Cadastros" },
     { id: "veiculos",             label: "🚗 Veículos",             grupo: "Cadastros" },
     { id: "dashboard_producao",   label: "🏭 Dashboard Produção",  grupo: "Produção" },
