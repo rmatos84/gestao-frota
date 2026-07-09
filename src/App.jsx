@@ -1933,6 +1933,40 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
   );
 }
 
+// ─── Gerador de Token JWT para Painel BI ─────────────────────
+// Usa Web Crypto API nativa — sem dependência externa
+const BI_SECRET = "supremo_acai_bi_secret_2026"; // mesma chave no Streamlit
+
+async function gerarTokenBI(user, perfil) {
+  const header  = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" })).replace(/=/g,"").replace(/\+/g,"-").replace(/\//g,"_");
+  const payload = btoa(JSON.stringify({
+    email: user?.email || "",
+    nome:  user?.user_metadata?.nome || user?.email || "",
+    perfil,
+    iat: Math.floor(Date.now() / 1000),
+    exp: Math.floor(Date.now() / 1000) + 300, // expira em 5 minutos
+  })).replace(/=/g,"").replace(/\+/g,"-").replace(/\//g,"_");
+
+  const msg = `${header}.${payload}`;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(BI_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(msg));
+  const signature = btoa(String.fromCharCode(...new Uint8Array(sig)))
+    .replace(/=/g,"").replace(/\+/g,"-").replace(/\//g,"_");
+
+  return `${msg}.${signature}`;
+}
+
+async function abrirBI(user, perfil) {
+  const token = await gerarTokenBI(user, perfil);
+  window.open(`https://supremoacai-pz4zgglgw4dhgnjjsyptdi.streamlit.app/?token=${token}`, "_blank");
+}
+
 export default function App() {
   const [user, setUser] = useState(() => {
     try {
@@ -2660,7 +2694,7 @@ export default function App() {
               {acesso("dashboard_producao") && sideNavBtn("📊", "Dashboard", tab === "dashboard_producao", () => { setTab("dashboard_producao"); setSidebarOpen(false); })}
               {acesso("planejamento_producao") && sideNavBtn("📅", "Planejamento", tab === "planejamento_producao", () => { setTab("planejamento_producao"); setSidebarOpen(false); })}
               {acesso("cadastro_produtos") && sideNavBtn("📦", "Produtos", tab === "cadastro_produtos", () => { setTab("cadastro_produtos"); setSidebarOpen(false); })}
-              {acesso("painel_bi") && sideNavBtn("📊", "Painel BI", false, () => { setSidebarOpen(false); window.open("https://supremoacai-pz4zgglgw4dhgnjjsyptdi.streamlit.app/", "_blank"); })}
+              {acesso("painel_bi") && sideNavBtn("📊", "Painel BI", false, () => { setSidebarOpen(false); abrirBI(user, perfil); })}
             </NavGroup>
           )}
           {perfil === "admin" && (
@@ -2937,7 +2971,7 @@ export default function App() {
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))", gap:12 }}>
                     {modulosAcessiveis.map(m => (
-                      <button key={m.id} onClick={() => m.externo ? window.open(m.externo, '_blank') : setTab(m.id)}
+                      <button key={m.id} onClick={() => m.id === 'painel_bi' ? abrirBI(user, perfil) : m.externo ? window.open(m.externo, '_blank') : setTab(m.id)}
                         style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:16, padding:"18px 20px", cursor:"pointer", textAlign:"left", transition:"all 0.15s" }}
                         onMouseEnter={e => { e.currentTarget.style.border="1px solid #06b6d4"; e.currentTarget.style.background="rgba(6,182,212,0.05)"; }}
                         onMouseLeave={e => { e.currentTarget.style.border="1px solid #1e293b"; e.currentTarget.style.background="#0f172a"; }}>
