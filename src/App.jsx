@@ -1637,7 +1637,9 @@ function LoginScreen({ onLogin }) {
 // MÓDULO MANUTENÇÕES — Supremo Açaí 360°
 // ============================================================
 function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelete }) {
-  const [form, setForm] = React.useState({ data: "", veiculo_id: "", descricao: "", valor: "" });
+  const [form, setForm] = React.useState({ data: "", veiculo_id: "", descricao: "", valor: "", prestador: "" });
+  const [prestadorInput, setPrestadorInput] = React.useState("");
+  const [showPrestadores, setShowPrestadores] = React.useState(false);
   const [editId, setEditId] = React.useState(null);
   const [showForm, setShowForm] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -1649,7 +1651,9 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
   const [confirmDelete, setConfirmDelete] = React.useState(null);
 
   const resetForm = () => {
-    setForm({ data: "", veiculo_id: "", descricao: "", valor: "" });
+    setForm({ data: "", veiculo_id: "", descricao: "", valor: "", prestador: "" });
+    setPrestadorInput("");
+    setShowPrestadores(false);
     setEditId(null);
     setErro("");
   };
@@ -1657,7 +1661,9 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
   const abrirNovo = () => { resetForm(); setShowForm(true); };
 
   const abrirEditar = (m) => {
-    setForm({ data: m.data || "", veiculo_id: m.veiculo_id || "", descricao: m.descricao || "", valor: m.valor != null ? String(m.valor) : "" });
+    setForm({ data: m.data || "", veiculo_id: m.veiculo_id || "", descricao: m.descricao || "", valor: m.valor != null ? String(m.valor) : "", prestador: m.prestador || "" });
+    setPrestadorInput(m.prestador || "");
+    setShowPrestadores(false);
     setEditId(m.id);
     setShowForm(true);
     setErro("");
@@ -1672,7 +1678,8 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
     setSaving(true);
     setErro("");
     try {
-      const payload = { data: form.data, veiculo_id: form.veiculo_id, descricao: form.descricao.trim(), valor };
+      const prestador = prestadorInput.trim();
+      const payload = { data: form.data, veiculo_id: form.veiculo_id, descricao: form.descricao.trim(), valor, prestador: prestador || null };
       if (editId) {
         await onUpdate(editId, payload);
       } else {
@@ -1706,6 +1713,7 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
       va = `${nA?.modelo||""} ${nA?.placa||""}`;
       vb = `${nB?.modelo||""} ${nB?.placa||""}`;
     }
+    else if (sort.col === "prestador") { va = a.prestador||""; vb = b.prestador||""; }
     else if (sort.col === "descricao") { va = a.descricao||""; vb = b.descricao||""; }
     else if (sort.col === "valor")     { va = parseFloat(a.valor||0); vb = parseFloat(b.valor||0); }
     else { va = a[sort.col]||""; vb = b[sort.col]||""; }
@@ -1716,6 +1724,19 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
 
   const totalValor = filtradas.reduce((s, m) => s + parseFloat(m.valor || 0), 0);
   const temFiltro = filtroVeiculo || filtroDataIni || filtroDataFim;
+
+  // Lista de prestadores únicos já cadastrados
+  const prestadoresConhecidos = React.useMemo(() => {
+    const lista = manutencoes
+      .map(m => m.prestador)
+      .filter(p => p && p.trim())
+      .map(p => p.trim());
+    return [...new Set(lista)].sort((a, b) => a.localeCompare(b));
+  }, [manutencoes]);
+
+  const prestadoresFiltrados = prestadoresConhecidos.filter(p =>
+    p.toLowerCase().includes(prestadorInput.toLowerCase())
+  );
 
   const SortTh = ({ col, label, style = {} }) => {
     const active = sort.col === col;
@@ -1796,6 +1817,7 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
                 <SortTh col="data"      label="Data" />
                 <SortTh col="veiculo"   label="Veículo" />
                 <SortTh col="descricao" label="Descrição do Serviço" />
+                <SortTh col="prestador" label="Oficina/Prestador" />
                 <SortTh col="valor"     label="Valor" style={{ textAlign: "right" }} />
                 <th style={{ padding: "10px 14px", color: "#64748b", fontSize: 12, fontWeight: 700, textTransform: "uppercase", width: 80 }}></th>
               </tr>
@@ -1818,6 +1840,11 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
                       <div style={{ fontSize: 11, color: "#475569" }}>{vei?.placa || ""}</div>
                     </td>
                     <td style={{ padding: "12px 14px", color: "#94a3b8", fontSize: 13, maxWidth: 320 }}>{m.descricao}</td>
+                    <td style={{ padding: "12px 14px" }}>
+                      {m.prestador
+                        ? <span style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#f59e0b", borderRadius: 6, padding: "3px 8px", fontSize: 12, fontWeight: 600 }}>🔧 {m.prestador}</span>
+                        : <span style={{ color: "#334155", fontSize: 12 }}>—</span>}
+                    </td>
                     <td style={{ padding: "12px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
                       <span style={{ fontWeight: 700, color: "#f59e0b", fontSize: 14 }}>
                         R$ {parseFloat(m.valor || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -1867,6 +1894,39 @@ function ManutencoesTab({ manutencoes, veiculos, user, onSave, onUpdate, onDelet
                     <option key={v.id} value={v.id}>{v.modelo} — {v.placa} ({v.tipo})</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Prestador / Oficina */}
+              <div style={{ position: "relative" }}>
+                <label style={{ display: "block", fontSize: 12, color: "#64748b", fontWeight: 600, textTransform: "uppercase", marginBottom: 6 }}>Oficina / Prestador</label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="text"
+                    value={prestadorInput}
+                    onChange={e => { setPrestadorInput(e.target.value); setForm(f => ({ ...f, prestador: e.target.value })); setShowPrestadores(true); }}
+                    onFocus={() => setShowPrestadores(true)}
+                    onBlur={() => setTimeout(() => setShowPrestadores(false), 150)}
+                    placeholder="Digite ou selecione uma oficina..."
+                    autoComplete="off"
+                    style={{ width: "100%", background: "#1e293b", border: "1px solid #334155", borderRadius: 8, color: "#f1f5f9", padding: "10px 14px", fontSize: 14 }}
+                  />
+                  {showPrestadores && prestadoresFiltrados.length > 0 && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#1e293b", border: "1px solid #334155", borderRadius: 8, marginTop: 4, zIndex: 999, maxHeight: 180, overflowY: "auto", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+                      {prestadoresFiltrados.map(p => (
+                        <div key={p}
+                          onMouseDown={() => { setPrestadorInput(p); setForm(f => ({ ...f, prestador: p })); setShowPrestadores(false); }}
+                          style={{ padding: "9px 14px", fontSize: 13, color: "#e2e8f0", cursor: "pointer", borderBottom: "1px solid #0f172a" }}
+                          onMouseEnter={e => e.currentTarget.style.background = "rgba(245,158,11,0.1)"}
+                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                          🔧 {p}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {prestadoresFiltrados.length === 0 && prestadorInput.trim() && (
+                  <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 4 }}>✦ Novo prestador será cadastrado</div>
+                )}
               </div>
 
               {/* Descrição */}
