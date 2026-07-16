@@ -2063,6 +2063,8 @@ export default function App() {
   const [showMotoristaForm, setShowMotoristaForm] = useState(false);
   const [showVeiculoForm, setShowVeiculoForm] = useState(false);
   const [showAbastForm, setShowAbastForm] = useState(false);
+  const [editAbast, setEditAbast] = useState(null);      // registro sendo editado
+  const [confirmDeleteAbast, setConfirmDeleteAbast] = useState(null); // id p/ confirmar delete
   const [formMotorista, setFormMotorista] = useState(emptyMotorista);
   const [formVeiculo, setFormVeiculo] = useState(emptyVeiculo);
   const [editingVeiculo, setEditingVeiculo] = useState(null);
@@ -3432,6 +3434,7 @@ export default function App() {
                           <SortTh col="kml" label="km/L" />
                           <th style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>Preço/L</th>
                           <SortTh col="valor" label="Valor Total" />
+                          {perfil === "admin" && <th style={{ padding:"10px 14px", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>Ações</th>}
                         </tr>
                       </thead>
                       <tbody>{paginated.map((r,i) => {
@@ -3470,6 +3473,16 @@ export default function App() {
                         </td>
                           <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro?"R$ "+precoLitro:"—"}</td>
                           <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
+                          {perfil === "admin" && (
+                            <td style={{ padding:"10px 10px", whiteSpace:"nowrap" }}>
+                              <div style={{ display:"flex", gap:5 }}>
+                                <button onClick={() => setEditAbast({...r})} title="Editar"
+                                  style={{ background:"rgba(6,182,212,0.1)", border:"1px solid rgba(6,182,212,0.2)", color:"#06b6d4", borderRadius:7, padding:"4px 8px", fontSize:12, cursor:"pointer" }}>✏️</button>
+                                <button onClick={() => setConfirmDeleteAbast(r.id)} title="Excluir"
+                                  style={{ background:"rgba(248,113,113,0.1)", border:"1px solid rgba(248,113,113,0.2)", color:"#f87171", borderRadius:7, padding:"4px 8px", fontSize:12, cursor:"pointer" }}>🗑️</button>
+                              </div>
+                            </td>
+                          )}
                         </tr>;
                       })}</tbody>
                     </table>
@@ -3644,6 +3657,97 @@ export default function App() {
               await loadAll();
             }}
           />
+        )}
+
+        {/* Modal Editar Abastecimento — admin */}
+        {editAbast && perfil === "admin" && (
+          <div onClick={() => setEditAbast(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:500, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background:"#0f172a", border:"1px solid #1e293b", borderRadius:20, width:"100%", maxWidth:520, padding:28, maxHeight:"90vh", overflowY:"auto" }}>
+              <div style={{ fontSize:18, fontWeight:700, color:"#f1f5f9", marginBottom:20 }}>✏️ Editar Abastecimento</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12 }}>
+                <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Motorista</label>
+                  <select value={editAbast.motorista_id} onChange={e => setEditAbast(p => ({...p, motorista_id:e.target.value}))}
+                    style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13 }}>
+                    {motoristas.filter(m => m.ativo !== false).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                  </select>
+                </div>
+                <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Veículo</label>
+                  <select value={editAbast.veiculo_id} onChange={e => setEditAbast(p => ({...p, veiculo_id:e.target.value}))}
+                    style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13 }}>
+                    {veiculos.map(v => <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>)}
+                  </select>
+                </div>
+                {[["data","Data","date"],["km_inicial","KM Inicial","number"],["km_final","KM Final","number"],["combustivel_litros","Litros","number"],["valor_total","Valor Total (R$)","number"],["observacao","Observação","text"]].map(([f,l,t]) => (
+                  <div key={f}><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>{l}</label>
+                    <input type={t} value={editAbast[f]||""} onChange={e => setEditAbast(p => ({...p,[f]:e.target.value}))}
+                      style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13 }} />
+                  </div>
+                ))}
+                <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4, textTransform:"uppercase" }}>Ajudante</label>
+                  <select value={editAbast.ajudante_id||""} onChange={e => setEditAbast(p => ({...p, ajudante_id:e.target.value||null}))}
+                    style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13 }}>
+                    <option value="">Nenhum</option>
+                    {motoristas.filter(m => m.ativo !== false && m.id !== editAbast.motorista_id).map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginTop:20 }}>
+                <button onClick={() => setEditAbast(null)}
+                  style={{ flex:1, background:"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:10, padding:"11px", fontSize:14, cursor:"pointer" }}>
+                  Cancelar
+                </button>
+                <button onClick={async () => {
+                  const mot = motoristas.find(m => m.id === editAbast.motorista_id);
+                  const vei = veiculos.find(v => v.id === editAbast.veiculo_id);
+                  const ajudante = motoristas.find(m => m.id === editAbast.ajudante_id);
+                  await api(`abastecimentos?id=eq.${editAbast.id}`, "PATCH", {
+                    motorista_id: editAbast.motorista_id,
+                    motorista_nome: mot?.nome || "",
+                    veiculo_id: editAbast.veiculo_id,
+                    veiculo_descricao: `${vei?.modelo||""} - ${vei?.placa||""}`,
+                    data: editAbast.data,
+                    km_inicial: parseFloat(editAbast.km_inicial),
+                    km_final: parseFloat(editAbast.km_final),
+                    combustivel_litros: parseFloat(editAbast.combustivel_litros),
+                    valor_total: editAbast.valor_total ? parseFloat(editAbast.valor_total) : null,
+                    observacao: editAbast.observacao || null,
+                    ajudante_id: editAbast.ajudante_id || null,
+                    ajudante_nome: ajudante?.nome || null,
+                  });
+                  await api("auditoria", "POST", { acao:"UPDATE", tabela:"abastecimentos", usuario_nome: user?.user_metadata?.nome||user?.email, descricao:`Editou abastecimento de ${mot?.nome||""} em ${editAbast.data}` });
+                  setEditAbast(null);
+                  await loadAll();
+                }} style={{ flex:2, background:"linear-gradient(135deg,#06b6d4,#3b82f6)", border:"none", color:"#fff", borderRadius:10, padding:"11px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Confirmar Delete Abastecimento — admin */}
+        {confirmDeleteAbast && perfil === "admin" && (
+          <div onClick={() => setConfirmDeleteAbast(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:600, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background:"#0f172a", border:"1px solid rgba(248,113,113,0.3)", borderRadius:16, padding:28, maxWidth:380, width:"100%", textAlign:"center" }}>
+              <div style={{ fontSize:36, marginBottom:12 }}>⚠️</div>
+              <div style={{ fontSize:16, fontWeight:700, color:"#f1f5f9", marginBottom:8 }}>Excluir Abastecimento</div>
+              <div style={{ fontSize:13, color:"#94a3b8", marginBottom:24 }}>Esta ação não pode ser desfeita.</div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button onClick={() => setConfirmDeleteAbast(null)}
+                  style={{ flex:1, background:"#1e293b", border:"1px solid #334155", color:"#94a3b8", borderRadius:10, padding:"11px", fontSize:14, cursor:"pointer" }}>
+                  Cancelar
+                </button>
+                <button onClick={async () => {
+                  await api(`abastecimentos?id=eq.${confirmDeleteAbast}`, "DELETE");
+                  await api("auditoria", "POST", { acao:"DELETE", tabela:"abastecimentos", usuario_nome: user?.user_metadata?.nome||user?.email, descricao:"Excluiu registro de abastecimento" });
+                  setConfirmDeleteAbast(null);
+                  await loadAll();
+                }} style={{ flex:1, background:"rgba(248,113,113,0.2)", border:"1px solid rgba(248,113,113,0.4)", color:"#f87171", borderRadius:10, padding:"11px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                  Excluir
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {!loading && tab === "ocorrencias" && acesso("ocorrencias") && (
