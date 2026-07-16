@@ -3361,12 +3361,51 @@ export default function App() {
                       </select>
                     </div>
                     <div><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>VEÍCULO</label>
-                      <select value={formAbast.veiculo_id} onChange={e => setFormAbast(p => ({...p,veiculo_id:e.target.value}))} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
+                      <select value={formAbast.veiculo_id} onChange={e => {
+                        const vid = e.target.value;
+                        // Busca último checklist com km do veículo <= data do abastecimento
+                        const dataAbast = formAbast.data || new Date().toISOString().split("T")[0];
+                        const ultimoCk = [...checklists]
+                          .filter(c => c.veiculo_id === vid && c.km != null && (c.data||"") <= dataAbast)
+                          .sort((a, b) => {
+                            if (b.data !== a.data) return (b.data||"") > (a.data||"") ? 1 : -1;
+                            return new Date(b.created_at||0) - new Date(a.created_at||0);
+                          })[0];
+                        setFormAbast(p => ({
+                          ...p,
+                          veiculo_id: vid,
+                          km_inicial: ultimoCk ? String(Math.round(ultimoCk.km)) : p.km_inicial,
+                        }));
+                      }} style={{ width:"100%", background:"#1e293b", border:"1px solid #334155", borderRadius:8, padding:"8px 12px", color:"#f1f5f9", fontSize:13, outline:"none" }}>
                         <option value="">Selecione...</option>{veiculos.map(v => <option key={v.id} value={v.id}>{TIPO_ICON[v.tipo]||""} {v.modelo} - {v.placa}</option>)}
                       </select>
+                      {formAbast.veiculo_id && (() => {
+                        const dataAbast = formAbast.data || new Date().toISOString().split("T")[0];
+                        const ultimoCk = [...checklists]
+                          .filter(c => c.veiculo_id === formAbast.veiculo_id && c.km != null && (c.data||"") <= dataAbast)
+                          .sort((a, b) => {
+                            if (b.data !== a.data) return (b.data||"") > (a.data||"") ? 1 : -1;
+                            return new Date(b.created_at||0) - new Date(a.created_at||0);
+                          })[0];
+                        return ultimoCk
+                          ? <div style={{ fontSize:10, color:"#f59e0b", marginTop:4 }}>📋 Checklist de {fmtData(ultimoCk.data)}: {Math.round(ultimoCk.km).toLocaleString("pt-BR")} km</div>
+                          : <div style={{ fontSize:10, color:"#475569", marginTop:4 }}>Sem checklist até {fmtData(dataAbast)}</div>;
+                      })()}
                     </div>
                     {[["data","DATA","date",false],["km_inicial","KM INICIAL","number",true],["km_final","KM FINAL","number",true],["combustivel_litros","LITROS","number",false],["valor_total","VALOR TOTAL (R$)","number",false],["observacao","OBSERVAÇÃO","text",false]].map(([f,l,t,intOnly]) => (
-                      <div key={f}><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>{l}</label>{inp(formAbast[f], v => setFormAbast(p => ({...p,[f]:v})), l, t, intOnly)}</div>
+                      <div key={f}><label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>{l}</label>{inp(formAbast[f], v => {
+                        if (f === "data" && formAbast.veiculo_id) {
+                          const ultimoCk = [...checklists]
+                            .filter(c => c.veiculo_id === formAbast.veiculo_id && c.km != null && (c.data||"") <= v)
+                            .sort((a, b) => {
+                              if (b.data !== a.data) return (b.data||"") > (a.data||"") ? 1 : -1;
+                              return new Date(b.created_at||0) - new Date(a.created_at||0);
+                            })[0];
+                          setFormAbast(p => ({ ...p, data: v, km_inicial: ultimoCk ? String(Math.round(ultimoCk.km)) : p.km_inicial }));
+                        } else {
+                          setFormAbast(p => ({...p,[f]:v}));
+                        }
+                      }, l, t, intOnly)}</div>
                     ))}
                     <div>
                       <label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:4 }}>AJUDANTE <span style={{ color:"#334155", fontSize:10 }}>(opcional)</span></label>
