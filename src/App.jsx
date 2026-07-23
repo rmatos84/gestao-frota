@@ -3323,7 +3323,8 @@ export default function App() {
             else if (abastSort.col === "veiculo") { va = a.veiculo_descricao||""; vb = b.veiculo_descricao||""; }
             else if (abastSort.col === "km_rod") { va = a.km_final-a.km_inicial; vb = b.km_final-b.km_inicial; }
             else if (abastSort.col === "kml") { va = (a.km_final-a.km_inicial)/parseFloat(a.combustivel_litros); vb = (b.km_final-b.km_inicial)/parseFloat(b.combustivel_litros); }
-            else if (abastSort.col === "valor") { va = parseFloat(a.valor_total||0); vb = parseFloat(b.valor_total||0); }
+            else if (abastSort.col === "valor")      { va = parseFloat(a.valor_total||0); vb = parseFloat(b.valor_total||0); }
+            else if (abastSort.col === "created_at") { va = a.created_at||""; vb = b.created_at||""; }
             else if (abastSort.col === "litros") { va = parseFloat(a.combustivel_litros||0); vb = parseFloat(b.combustivel_litros||0); }
             else { va = a[abastSort.col]||0; vb = b[abastSort.col]||0; }
             if (va < vb) return abastSort.dir === "asc" ? -1 : 1;
@@ -3473,6 +3474,7 @@ export default function App() {
                           <SortTh col="kml" label="km/L" />
                           <th style={{ padding:"10px 14px", textAlign:"left", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>Preço/L</th>
                           <SortTh col="valor" label="Valor Total" />
+                          {perfil === "admin" && <th style={{ padding:"10px 14px", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>Registrado em</th>}
                           {perfil === "admin" && <th style={{ padding:"10px 14px", color:"#64748b", fontWeight:600, fontSize:10, textTransform:"uppercase", whiteSpace:"nowrap" }}>Ações</th>}
                         </tr>
                       </thead>
@@ -3512,6 +3514,25 @@ export default function App() {
                         </td>
                           <td style={{ padding:"10px 14px", color:"#e2e8f0" }}>{precoLitro?"R$ "+precoLitro:"—"}</td>
                           <td style={{ padding:"10px 14px", color:"#a78bfa" }}>{r.valor_total?"R$ "+parseFloat(r.valor_total).toFixed(2):"—"}</td>
+                          {perfil === "admin" && (() => {
+                            const registradoEm = r.created_at ? new Date(r.created_at) : null;
+                            const dataAbast    = r.data ? new Date(r.data + "T00:00:00") : null;
+                            let cor = "#64748b", bg = "transparent", diffLabel = "—";
+                            if (registradoEm && dataAbast) {
+                              const diffDias = Math.round((registradoEm.setHours(0,0,0,0), new Date(registradoEm.toDateString()) - dataAbast) / 86400000);
+                              diffLabel = new Date(r.created_at).toLocaleDateString("pt-BR");
+                              if      (diffDias <= 1) { cor = "#10b981"; bg = "rgba(16,185,129,0.1)"; }
+                              else if (diffDias === 2) { cor = "#fbbf24"; bg = "rgba(251,191,36,0.1)"; }
+                              else                     { cor = "#f87171"; bg = "rgba(248,113,113,0.1)"; }
+                            }
+                            return (
+                              <td style={{ padding:"10px 14px", whiteSpace:"nowrap" }}>
+                                <span style={{ background:bg, color:cor, borderRadius:6, padding:"3px 8px", fontSize:12, fontWeight:600 }}>
+                                  {diffLabel}
+                                </span>
+                              </td>
+                            );
+                          })()}
                           {perfil === "admin" && (
                             <td style={{ padding:"10px 10px", whiteSpace:"nowrap" }}>
                               <div style={{ display:"flex", gap:5 }}>
